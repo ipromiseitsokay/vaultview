@@ -24,6 +24,7 @@ import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import okhttp3.FormBody
+import okhttp3.HttpUrl.Companion.toHttpUrl
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import java.io.File
@@ -91,10 +92,15 @@ class DownloadService : Service() {
         var partial: DocumentFile? = null
         try {
             set { item.state = DownloadState.DOWNLOADING; item.message = null }
-            val http = Request.Builder().url(req.url)
+            // GET forms send their fields in the URL, like a browser does.
+            val url = if (req.method.equals("GET", true) && req.form.isNotEmpty()) {
+                req.url.toHttpUrl().newBuilder().apply { req.form.forEach { (k, v) -> setQueryParameter(k, v) } }.build()
+            } else req.url.toHttpUrl()
+            val http = Request.Builder().url(url)
                 .header("User-Agent", req.userAgent)
                 .header("Referer", req.referer)
-                .apply { CookieManager.getInstance().getCookie(req.url)?.let { header("Cookie", it) } }
+                .header("Accept", "*/*")
+                .apply { CookieManager.getInstance().getCookie(url.toString())?.let { header("Cookie", it) } }
                 .apply {
                     if (req.method.equals("POST", true)) {
                         post(FormBody.Builder().apply { req.form.forEach { (k, v) -> add(k, v) } }.build())
@@ -103,7 +109,10 @@ class DownloadService : Service() {
                 .build()
 
             client.newCall(http).execute().use { res ->
-                if (!res.isSuccessful) throw IOException("Server said HTTP ${res.code}")
+                if (!res.isSuccessful) throw IOException(
+                    if (res.code in 400..499) "The site refused the download (HTTP ${res.code}). Open the game again and retry."
+                    else "Server error (HTTP ${res.code}). Try again in a bit."
+                )
                 val body = res.body ?: throw IOException("Empty response")
                 if (body.contentType()?.subtype == "html") {
                     throw IOException("Got a web page instead of a file. Open the game again and retry.")

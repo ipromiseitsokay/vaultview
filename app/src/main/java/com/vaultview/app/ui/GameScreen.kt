@@ -15,6 +15,17 @@ import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
@@ -35,6 +46,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -43,7 +55,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.viewinterop.AndroidView
 import androidx.core.content.ContextCompat
 import coil.compose.AsyncImage
+import com.vaultview.app.data.DownloadItem
 import com.vaultview.app.data.DownloadRequest
+import com.vaultview.app.data.DownloadState
 import com.vaultview.app.data.Downloads
 import com.vaultview.app.data.Settings
 import com.vaultview.app.data.Systems
@@ -67,6 +81,8 @@ private const val READ_JS = """
   var f = document.getElementById('dl-form') ||
           [].slice.call(document.forms).filter(function (x) { return /(^|\/\/)dl\d*\./.test(x.getAttribute('action') || ''); })[0];
   if (!f) return JSON.stringify({state: 'none'});
+  // The site's own submit handler adjusts the form (it switches it to GET); run it first.
+  try { if (typeof window.submitDL === 'function') window.submitDL(f, null); } catch (e) {}
   var fields = [];
   for (var i = 0; i < f.elements.length; i++) {
     var el = f.elements[i];
@@ -86,7 +102,7 @@ private const val READ_JS = """
     if (want.indexOf(k) >= 0 && v && !facts.some(function (p) { return p[0] === k; })) facts.push([k, v]);
   });
   return JSON.stringify({state: 'ready', action: new URL(f.getAttribute('action'), location.href).href,
-    method: (f.getAttribute('method') || 'GET').toUpperCase(), fields: fields, versions: versions, size: size, facts: facts});
+    method: (f.method || 'GET').toUpperCase(), fields: fields, versions: versions, size: size, facts: facts});
 })()
 """
 
@@ -96,10 +112,11 @@ private const val HOOK_JS = """
   if (window.__vaultview) return; window.__vaultview = true;
   function isDl(f) { try { return /(^|\.)dl\d*\./.test(new URL(f.getAttribute('action') || location.href, location.href).hostname); } catch (e) { return false; } }
   function send(f) {
+    try { if (typeof window.submitDL === 'function') window.submitDL(f, null); } catch (e) {}
     var fields = [];
     for (var i = 0; i < f.elements.length; i++) { var el = f.elements[i];
       if (el.name && !el.disabled && el.type !== 'submit') fields.push([el.name, el.value]); }
-    VaultView.download(new URL(f.getAttribute('action'), location.href).href, (f.getAttribute('method') || 'GET').toUpperCase(), JSON.stringify(fields));
+    VaultView.download(new URL(f.getAttribute('action'), location.href).href, (f.method || 'GET').toUpperCase(), JSON.stringify(fields));
   }
   document.addEventListener('submit', function (e) { if (isDl(e.target)) { e.preventDefault(); e.stopImmediatePropagation(); send(e.target); } }, true);
   var orig = HTMLFormElement.prototype.submit;
@@ -142,6 +159,7 @@ fun GameScreen(id: Int, title: String, system: String?, onBack: () -> Unit, onSh
     var askFolder by remember { mutableStateOf(false) }
     var ua by remember { mutableStateOf("") }
     val active = Downloads.items.count { it.active }
+    val mine = Downloads.items.firstOrNull { it.gameId == id }
     val downloadFocus = remember { FocusRequester() }
 
     val notifPermission = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
@@ -150,7 +168,6 @@ fun GameScreen(id: Int, title: String, system: String?, onBack: () -> Unit, onSh
             ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
         ) notifPermission.launch(Manifest.permission.POST_NOTIFICATIONS)
         Downloads.enqueue(context, id, title, sys?.code ?: system, req)
-        Toast.makeText(context, "Downloading $title", Toast.LENGTH_SHORT).show()
     }
     fun request(req: DownloadRequest) {
         if (Settings.folderUri == null) { pending = req; askFolder = true } else start(req)
@@ -162,21 +179,28 @@ fun GameScreen(id: Int, title: String, system: String?, onBack: () -> Unit, onSh
     fun readPage(view: WebView) = view.evaluateJavascript(READ_JS) { raw ->
         val json = runCatching { JSONObject("{\"v\":$raw}").getString("v") }.getOrNull() ?: return@evaluateJavascript
         val p = parseInfo(json)
-        phase = p
-        if (p is Phase.Ready) {
-            showPage = false
-            version = version ?: p.info.fields.firstOrNull { it.first == "mediaId" }?.second
+        when {
+            p is Phase.Ready -> {
+                phase = p
+                showPage = false
+                version = version ?: p.info.fields.firstOrNull { it.first == "mediaId" }?.second
+            }
+            // Once the button is showing, a background reload must not make the screen jump back.
+            phase is Phase.Ready -> Unit
+            else -> phase = p
         }
     }
+    fun reload() { phase = Phase.Loading; web?.reload() }
 
     BackHandler { if (showPage && phase is Phase.Ready) showPage = false else onBack() }
 
-    Box(Modifier.fillMaxSize()) {
+    Box(Modifier.fillMaxSize().background(Bg)) {
         // The real page. Hidden behind the native screen unless the human check needs a tap.
         AndroidView(
             modifier = Modifier.fillMaxSize().padding(top = 64.dp),
             factory = { ctx ->
                 WebView(ctx).apply {
+                    setBackgroundColor(Bg.toArgb()) // no white flash while pages load
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
                     CookieManager.getInstance().setAcceptCookie(true)
@@ -199,9 +223,9 @@ fun GameScreen(id: Int, title: String, system: String?, onBack: () -> Unit, onSh
                             view.evaluateJavascript(HOOK_JS, null)
                             CookieManager.getInstance().flush()
                             readPage(view)
-                            // Cloudflare can take a moment; look again, then reveal the page if still stuck.
                             view.postDelayed({ if (phase !is Phase.Ready) readPage(view) }, 2500)
-                            view.postDelayed({ if (phase !is Phase.Ready) { readPage(view); showPage = true } }, 9000)
+                            // Only show the site's page if it is still waiting on the human check.
+                            view.postDelayed({ if (phase is Phase.NeedsCheck) showPage = true }, 7000)
                         }
                         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                             val host = request.url.host.orEmpty()
@@ -216,17 +240,18 @@ fun GameScreen(id: Int, title: String, system: String?, onBack: () -> Unit, onSh
             },
         )
 
-        if (!showPage) {
+        AnimatedVisibility(visible = !showPage, enter = fadeIn(tween(250)), exit = fadeOut(tween(250))) {
             Box(Modifier.fillMaxSize().background(Bg)) {
                 GameDetails(
-                    id, title, sys?.name ?: system, phase, version, wide, downloadFocus,
+                    id, title, sys?.name ?: system, phase, version, wide, downloadFocus, mine,
                     onVersion = { version = it },
                     onDownload = { info ->
                         val fields = info.fields.map { if (it.first == "mediaId" && version != null) it.first to version!! else it }
                         request(DownloadRequest(info.action, info.method, fields, pageUrl, ua))
                     },
                     onShowPage = { showPage = true },
-                    onRetry = { phase = Phase.Loading; web?.reload() },
+                    onShowDownloads = onShowDownloads,
+                    onRetry = { reload() },
                 )
             }
         }
@@ -240,11 +265,11 @@ fun GameScreen(id: Int, title: String, system: String?, onBack: () -> Unit, onSh
             Column(Modifier.weight(1f)) {
                 Text(title, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (showPage) Text(
-                    if (phase is Phase.NeedsCheck || phase is Phase.Loading) "Tick the box to prove you're human" else "vimm.net page",
+                    if (phase is Phase.Ready) "vimm.net page" else "Tick the box to prove you're human",
                     color = Muted, style = MaterialTheme.typography.labelSmall,
                 )
             }
-            IconButton(onClick = { phase = Phase.Loading; web?.reload() }) { Icon(Icons.Filled.Refresh, "Reload") }
+            IconButton(onClick = { reload() }) { Icon(Icons.Filled.Refresh, "Reload") }
             IconButton(onClick = { openOnSite(context, pageUrl) }) { Icon(Icons.Filled.Share, "Open in browser") }
             BadgedBox(badge = { if (active > 0) Badge { Text("$active") } }) {
                 IconButton(onClick = onShowDownloads) { Icon(DownloadIcon, "Downloads") }
@@ -252,7 +277,7 @@ fun GameScreen(id: Int, title: String, system: String?, onBack: () -> Unit, onSh
         }
     }
 
-    LaunchedEffect(phase) { if (phase is Phase.Ready) runCatching { kotlinx.coroutines.delay(200); downloadFocus.requestFocus() } }
+    LaunchedEffect(phase is Phase.Ready) { if (phase is Phase.Ready) runCatching { kotlinx.coroutines.delay(300); downloadFocus.requestFocus() } }
 
     if (askFolder) {
         AlertDialog(
@@ -274,105 +299,160 @@ fun GameScreen(id: Int, title: String, system: String?, onBack: () -> Unit, onSh
 @Composable
 private fun GameDetails(
     id: Int, title: String, system: String?, phase: Phase, version: String?, wide: Boolean, downloadFocus: FocusRequester,
-    onVersion: (String) -> Unit, onDownload: (PageInfo) -> Unit, onShowPage: () -> Unit, onRetry: () -> Unit,
+    mine: DownloadItem?,
+    onVersion: (String) -> Unit, onDownload: (PageInfo) -> Unit, onShowPage: () -> Unit, onShowDownloads: () -> Unit, onRetry: () -> Unit,
 ) {
+    // Entrance: art slides in, text rises, after the screen transition settles.
+    var shown by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { shown = true }
+
     Box(Modifier.fillMaxSize()) {
-        // Blurred box art as a backdrop, like a console store page.
         AsyncImage(
             model = Vimm.boxArt(id), contentDescription = null, contentScale = ContentScale.Crop,
-            modifier = Modifier.matchParentSize().androidxBlur().background(Bg),
-            alpha = 0.25f,
+            modifier = Modifier.matchParentSize().blur(40.dp), alpha = 0.28f,
         )
-        Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Bg.copy(alpha = 0.3f), Bg))))
+        Box(Modifier.matchParentSize().background(Brush.verticalGradient(listOf(Bg.copy(alpha = 0.2f), Bg.copy(alpha = 0.85f), Bg))))
 
         val body: @Composable ColumnScope.() -> Unit = {
             Text(title, style = if (wide) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Black)
             system?.let { Text(it, color = Accent, style = MaterialTheme.typography.titleSmall, modifier = Modifier.padding(top = 2.dp)) }
-            Spacer(Modifier.height(16.dp))
-            when (phase) {
-                Phase.Loading, Phase.NeedsCheck -> {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
-                        Spacer(Modifier.width(12.dp))
-                        Text("Getting download info from vimm.net…", color = Muted)
-                    }
-                }
-                is Phase.Problem -> {
-                    Text(phase.message, color = Muted)
-                    Spacer(Modifier.height(12.dp))
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        FilledTonalButton(onClick = onRetry) { Text("Try again") }
-                        OutlinedButton(onClick = onShowPage) { Text("Show vimm.net page") }
-                    }
-                }
-                is Phase.Ready -> {
-                    val info = phase.info
-                    if (info.versions.size > 1) {
-                        VersionPicker(info.versions, version, onVersion)
-                        Spacer(Modifier.height(12.dp))
-                    }
-                    Button(
-                        onClick = { onDownload(info) },
-                        modifier = Modifier.widthIn(min = 280.dp).height(56.dp)
-                            .focusRing(RoundedCornerShape(16.dp), 1.03f).focusRequester(downloadFocus),
-                        shape = RoundedCornerShape(16.dp),
-                    ) {
-                        Icon(DownloadIcon, null)
-                        Spacer(Modifier.width(10.dp))
-                        Text("Download" + (info.size?.let { " · $it" } ?: ""), fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.titleMedium, maxLines = 1, softWrap = false)
-                    }
-                    Text(
-                        listOfNotNull(
-                            Settings.folderLabel()?.let { "Saves to $it" } ?: "You'll pick a download folder first",
-                            if (Settings.autoExtract) "unzips automatically" else null,
-                        ).joinToString(" · "),
-                        color = Muted, style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 6.dp),
-                    )
-                    if (info.facts.isNotEmpty()) {
-                        Spacer(Modifier.height(18.dp))
-                        Surface(color = Panel.copy(alpha = 0.85f), shape = RoundedCornerShape(16.dp)) {
-                            Column(Modifier.padding(14.dp).widthIn(min = 260.dp)) {
-                                info.facts.forEach { (k, v) ->
-                                    Row(Modifier.padding(vertical = 3.dp)) {
-                                        Text(k, color = Muted, style = MaterialTheme.typography.bodySmall, modifier = Modifier.width(96.dp))
-                                        Text(v, style = MaterialTheme.typography.bodySmall)
-                                    }
-                                }
+            Spacer(Modifier.height(18.dp))
+            AnimatedContent(
+                targetState = phase,
+                contentKey = { it::class },
+                transitionSpec = { (fadeIn(tween(300)) + slideInVertically(tween(300)) { it / 6 }) togetherWith fadeOut(tween(150)) },
+                label = "phase",
+            ) { p ->
+                Column {
+                    when (p) {
+                        Phase.Loading, Phase.NeedsCheck -> LoadingButton()
+                        is Phase.Problem -> {
+                            Text(p.message, color = Muted)
+                            Spacer(Modifier.height(12.dp))
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                FilledTonalButton(onClick = onRetry) { Text("Try again") }
+                                OutlinedButton(onClick = onShowPage) { Text("Show vimm.net page") }
                             }
                         }
+                        is Phase.Ready -> ReadyBlock(p.info, version, mine, downloadFocus, onVersion, onDownload, onShowPage, onShowDownloads)
                     }
-                    Spacer(Modifier.height(12.dp))
-                    TextButton(onClick = onShowPage) { Text("Show vimm.net page") }
                 }
             }
         }
 
+        val artEnter = fadeIn(tween(400)) + slideInHorizontally(spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessLow)) { -it / 5 }
+        val textEnter = fadeIn(tween(400, delayMillis = 80)) + slideInVertically(spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessLow)) { it / 8 }
+        val shotEnter = fadeIn(tween(500, delayMillis = 160)) + slideInHorizontally(spring(dampingRatio = 0.85f, stiffness = Spring.StiffnessLow)) { it / 5 }
+
         if (wide) {
             Row(Modifier.fillMaxSize().padding(top = 64.dp).padding(24.dp), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
-                CoverArt(id, title, Modifier.fillMaxHeight().aspectRatio(0.75f).clip(RoundedCornerShape(18.dp)))
-                Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) { body() }
-                AsyncImage(
-                    model = Vimm.screenshot(id), contentDescription = "Screenshot", contentScale = ContentScale.Fit,
-                    modifier = Modifier.weight(0.9f).aspectRatio(4f / 3f).clip(RoundedCornerShape(16.dp)).background(Color.Black),
-                )
+                AnimatedVisibility(shown, enter = artEnter) {
+                    CoverArt(id, title, Modifier.fillMaxHeight().aspectRatio(0.75f).clip(RoundedCornerShape(18.dp)))
+                }
+                AnimatedVisibility(shown, enter = textEnter, modifier = Modifier.weight(1.25f)) {
+                    Column(Modifier.verticalScroll(rememberScrollState())) { body() }
+                }
+                AnimatedVisibility(shown, enter = shotEnter, modifier = Modifier.weight(0.75f)) {
+                    AsyncImage(
+                        model = Vimm.screenshot(id), contentDescription = "Screenshot", contentScale = ContentScale.Fit,
+                        modifier = Modifier.aspectRatio(4f / 3f).clip(RoundedCornerShape(16.dp)).background(Color.Black),
+                    )
+                }
             }
         } else {
             Column(Modifier.fillMaxSize().padding(top = 64.dp).verticalScroll(rememberScrollState()).padding(20.dp)) {
-                Row {
-                    CoverArt(id, title, Modifier.width(130.dp).aspectRatio(0.75f).clip(RoundedCornerShape(14.dp)))
-                    Spacer(Modifier.width(16.dp))
-                    AsyncImage(
-                        model = Vimm.screenshot(id), contentDescription = "Screenshot", contentScale = ContentScale.Fit,
-                        modifier = Modifier.weight(1f).aspectRatio(4f / 3f).clip(RoundedCornerShape(14.dp)).background(Color.Black),
-                    )
+                AnimatedVisibility(shown, enter = artEnter) {
+                    Row {
+                        CoverArt(id, title, Modifier.width(130.dp).aspectRatio(0.75f).clip(RoundedCornerShape(14.dp)))
+                        Spacer(Modifier.width(16.dp))
+                        AsyncImage(
+                            model = Vimm.screenshot(id), contentDescription = "Screenshot", contentScale = ContentScale.Fit,
+                            modifier = Modifier.weight(1f).aspectRatio(4f / 3f).clip(RoundedCornerShape(14.dp)).background(Color.Black),
+                        )
+                    }
                 }
                 Spacer(Modifier.height(18.dp))
-                body()
+                AnimatedVisibility(shown, enter = textEnter) { Column { body() } }
             }
         }
     }
+}
+
+/** Placeholder the same size as the Download button, with a moving shine. */
+@Composable
+private fun LoadingButton() {
+    Box(Modifier.width(240.dp).height(60.dp).clip(RoundedCornerShape(16.dp)).shimmer())
+    Text("Getting download info from vimm.net…", color = Muted, style = MaterialTheme.typography.labelSmall,
+        modifier = Modifier.padding(top = 8.dp))
+}
+
+@Composable
+private fun ReadyBlock(
+    info: PageInfo, version: String?, mine: DownloadItem?, downloadFocus: FocusRequester,
+    onVersion: (String) -> Unit, onDownload: (PageInfo) -> Unit, onShowPage: () -> Unit, onShowDownloads: () -> Unit,
+) {
+    if (info.versions.size > 1) {
+        VersionPicker(info.versions, version, onVersion)
+        Spacer(Modifier.height(12.dp))
+    }
+    val shape = RoundedCornerShape(16.dp)
+    val busy = mine?.active == true
+    val progress by animateFloatAsState(mine?.progress ?: 0f, tween(400), label = "dl")
+    Box(Modifier.focusRing(shape, 1.03f).clip(shape)) {
+        Button(
+            onClick = { if (busy) onShowDownloads() else onDownload(info) },
+            modifier = Modifier.widthIn(min = 240.dp).height(60.dp).focusRequester(downloadFocus),
+            contentPadding = PaddingValues(horizontal = 28.dp),
+            shape = shape,
+            colors = if (busy) ButtonDefaults.buttonColors(containerColor = PanelHi, contentColor = Color.White) else ButtonDefaults.buttonColors(),
+        ) {
+            Icon(DownloadIcon, null)
+            Spacer(Modifier.width(12.dp))
+            val (label, sub) = when {
+                mine?.state == DownloadState.QUEUED -> "Waiting…" to null
+                mine?.state == DownloadState.DOWNLOADING -> "Downloading" to "${(mine.progress * 100).toInt()}%"
+                mine?.state == DownloadState.EXTRACTING -> "Unzipping" to "${(mine.progress * 100).toInt()}%"
+                mine?.state == DownloadState.DONE -> "Downloaded ✓" to "Tap to get it again"
+                else -> "Download" to info.size
+            }
+            Column {
+                Text(label, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium, maxLines = 1)
+                sub?.let { Text(it, style = MaterialTheme.typography.labelSmall, maxLines = 1) }
+            }
+        }
+        if (busy) {
+            // Progress fills the button from the left.
+            Box(Modifier.matchParentSize()) {
+                Box(Modifier.fillMaxHeight().fillMaxWidth(progress.coerceIn(0f, 1f)).background(Accent.copy(alpha = 0.35f)))
+            }
+        }
+    }
+    val note = when (mine?.state) {
+        DownloadState.FAILED -> "Last try failed: ${mine.message}"
+        DownloadState.DONE -> "Saved to ${mine.savedTo}"
+        else -> listOfNotNull(
+            Settings.folderLabel()?.let { "Saves to $it" } ?: "You'll pick a download folder first",
+            if (Settings.autoExtract) "unzips automatically" else null,
+        ).joinToString(" · ")
+    }
+    Text(note, color = if (mine?.state == DownloadState.FAILED) Color(0xFFFF8A8A) else Muted,
+        style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(top = 6.dp))
+    if (info.facts.isNotEmpty()) {
+        Spacer(Modifier.height(18.dp))
+        Surface(color = Panel.copy(alpha = 0.85f), shape = RoundedCornerShape(16.dp)) {
+            Column(Modifier.padding(14.dp).widthIn(min = 260.dp)) {
+                info.facts.forEach { (k, v) ->
+                    Row(Modifier.padding(vertical = 3.dp)) {
+                        Text(k, color = Muted, style = MaterialTheme.typography.bodySmall, modifier = Modifier.width(96.dp))
+                        Text(v, style = MaterialTheme.typography.bodySmall)
+                    }
+                }
+            }
+        }
+    }
+    Spacer(Modifier.height(12.dp))
+    TextButton(onClick = onShowPage) { Text("Show vimm.net page") }
 }
 
 @Composable
@@ -390,5 +470,3 @@ private fun VersionPicker(versions: List<Pair<String, String>>, selected: String
         }
     }
 }
-
-private fun Modifier.androidxBlur() = this.blur(30.dp)

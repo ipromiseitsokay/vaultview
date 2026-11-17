@@ -1,5 +1,10 @@
 package com.vaultview.app.ui
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -18,10 +23,13 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.vaultview.app.data.Brand
@@ -41,6 +49,17 @@ fun HomeScreen(onSystem: (String) -> Unit, onGame: (Game) -> Unit) {
     val handhelds = shown.filter { it.handheld }.sortedBy { it.year }
     val full: (androidx.compose.foundation.lazy.grid.LazyGridItemSpanScope) -> GridItemSpan = { GridItemSpan(it.maxLineSpan) }
 
+    val glow by animateColorAsState(brand?.color ?: Accent, tween(600), label = "glow")
+    Box(Modifier.fillMaxSize()) {
+    Box(
+        Modifier.fillMaxSize().drawBehind {
+            // Soft light in the selected maker's colour, fading out well before the edges.
+            drawRect(Brush.radialGradient(
+                listOf(glow.copy(alpha = 0.24f), glow.copy(alpha = 0.08f), Color.Transparent),
+                center = Offset(size.width * 0.15f, 0f), radius = size.maxDimension * 0.6f,
+            ))
+        }
+    )
     LazyVerticalGrid(
         columns = GridCells.Adaptive(if (wide) 190.dp else 160.dp),
         contentPadding = PaddingValues(16.dp),
@@ -78,13 +97,14 @@ fun HomeScreen(onSystem: (String) -> Unit, onGame: (Game) -> Unit) {
             BrandPicker(brand, wide) { brandName = it?.name }
         }
         if (consoles.isNotEmpty()) {
-            item(span = full) { SectionLabel("Consoles") }
-            items(consoles, key = { it.code }) { s -> SystemCard(s) { onSystem(s.code) } }
+            item(span = full, key = "consoles") { SectionLabel("Consoles") }
+            items(consoles, key = { it.code }) { s -> Box(Modifier.animateItem()) { SystemCard(s) { onSystem(s.code) } } }
         }
         if (handhelds.isNotEmpty()) {
-            item(span = full) { SectionLabel("Handhelds") }
-            items(handhelds, key = { it.code }) { s -> SystemCard(s) { onSystem(s.code) } }
+            item(span = full, key = "handhelds") { SectionLabel("Handhelds") }
+            items(handhelds, key = { it.code }) { s -> Box(Modifier.animateItem()) { SystemCard(s) { onSystem(s.code) } } }
         }
+    }
     }
 }
 
@@ -107,17 +127,18 @@ private fun BrandPicker(selected: Brand?, wide: Boolean, onPick: (Brand?) -> Uni
 @Composable
 private fun BrandTile(label: String, count: Int, color: Color, active: Boolean, wide: Boolean, onClick: () -> Unit) {
     val shape = RoundedCornerShape(16.dp)
+    val fill by animateColorAsState(if (active) color else Panel, tween(300), label = "fill")
+    val edge by animateColorAsState(if (active) Color.Transparent else color.copy(alpha = 0.45f), tween(300), label = "edge")
+    val grow by animateFloatAsState(if (active) 1.04f else 1f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow), label = "grow")
     Column(
         Modifier
+            .graphicsLayer { scaleX = grow; scaleY = grow }
             .width(118.dp)
             .height(if (wide) 64.dp else 76.dp)
             .focusRing(shape)
             .clip(shape)
-            .background(
-                if (active) Brush.linearGradient(listOf(color, color.copy(alpha = 0.55f)))
-                else Brush.linearGradient(listOf(Panel, Panel))
-            )
-            .border(BorderStroke(1.dp, if (active) Color.Transparent else color.copy(alpha = 0.45f)), shape)
+            .background(Brush.linearGradient(listOf(fill, fill.copy(alpha = if (active) 0.55f else 1f))))
+            .border(BorderStroke(1.dp, edge), shape)
             .clickable(onClick = onClick)
             .padding(if (wide) 10.dp else 12.dp),
         verticalArrangement = Arrangement.SpaceBetween,

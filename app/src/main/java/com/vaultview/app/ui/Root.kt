@@ -1,6 +1,17 @@
 package com.vaultview.app.ui
 
 import android.net.Uri
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -117,7 +128,28 @@ fun VaultRoot() {
 
 @Composable
 private fun Host(nav: NavHostController, onGame: (Game) -> Unit, modifier: Modifier) {
-    NavHost(nav, startDestination = "home", modifier = modifier) {
+    // Tabs cross-fade; drilling into a system or game slides in from the right.
+    val ease = tween<Float>(320, easing = FastOutSlowInEasing)
+    fun deep(route: String?) = route?.startsWith("system/") == true || route?.startsWith("game/") == true
+    NavHost(
+        nav, startDestination = "home", modifier = modifier,
+        enterTransition = {
+            if (deep(targetState.destination.route)) fadeIn(ease) + slideInHorizontally(tween(320, easing = FastOutSlowInEasing)) { it / 6 }
+            else fadeIn(tween(220, delayMillis = 60))
+        },
+        exitTransition = {
+            if (deep(targetState.destination.route)) fadeOut(tween(200)) + scaleOut(tween(320), targetScale = 0.97f)
+            else fadeOut(tween(160))
+        },
+        popEnterTransition = {
+            if (deep(initialState.destination.route)) fadeIn(ease) + scaleIn(tween(320), initialScale = 0.97f)
+            else fadeIn(tween(220, delayMillis = 60))
+        },
+        popExitTransition = {
+            if (deep(initialState.destination.route)) fadeOut(tween(200)) + slideOutHorizontally(tween(320, easing = FastOutSlowInEasing)) { it / 6 }
+            else fadeOut(tween(160))
+        },
+    ) {
         composable("home") { HomeScreen(onSystem = { nav.navigate("system/$it") }, onGame = onGame) }
         composable("system/{code}") { e ->
             SystemScreen(e.arguments?.getString("code").orEmpty(), onBack = { nav.popBackStack() }, onGame = onGame)
@@ -157,6 +189,13 @@ private fun Logo() {
 
 @Composable
 private fun UpdateBanner() {
+    AnimatedVisibility(Updater.available != null, enter = expandVertically() + fadeIn(), exit = shrinkVertically() + fadeOut()) {
+        UpdateBannerContent()
+    }
+}
+
+@Composable
+private fun UpdateBannerContent() {
     val rel = Updater.available ?: return
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()

@@ -1,6 +1,14 @@
 package com.vaultview.app.ui
 
+import androidx.compose.animation.core.LinearEasing
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.tween
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.foundation.border
 import androidx.compose.runtime.compositionLocalOf
 import androidx.compose.runtime.getValue
@@ -41,4 +49,20 @@ val DownloadIcon: androidx.compose.ui.graphics.vector.ImageVector by lazy {
                 .parsePathString("M19,9h-4V3H9v6H5l7,7 7,-7zM5,18v2h14v-2H5z").toNodes(),
             fill = androidx.compose.ui.graphics.SolidColor(Color.Black),
         ).build()
+}
+
+/** A moving shine over a dark card, used while content loads. */
+fun Modifier.shimmer(): Modifier = composed {
+    val t = rememberInfiniteTransition(label = "shimmer")
+    val x by t.animateFloat(-1f, 2f, infiniteRepeatable(tween(1300, easing = LinearEasing)), label = "x")
+    drawBehind {
+        drawRect(PanelHi)
+        val w = size.width
+        drawRect(
+            Brush.linearGradient(
+                listOf(Color.Transparent, Color.White.copy(alpha = 0.07f), Color.Transparent),
+                start = Offset(w * x - w * 0.6f, 0f), end = Offset(w * x, size.height),
+            )
+        )
+    }
 }

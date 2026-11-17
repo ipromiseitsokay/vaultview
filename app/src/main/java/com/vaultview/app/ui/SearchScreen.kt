@@ -64,7 +64,7 @@ fun SearchScreen(onGame: (Game) -> Unit) {
         }
         when (val s = state) {
             null -> CenterMessage("Search every system on the Vault")
-            Load.Loading -> Spinner()
+            Load.Loading -> SkeletonGrid()
             is Load.Err -> CenterMessage(s.message, "Try again") { retry++ }
             is Load.Ok -> if (s.value.isEmpty()) CenterMessage("Nothing found for “$submitted”")
                 else GameGrid(s.value, onGame, showSystem = system == null)

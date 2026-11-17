@@ -1,5 +1,7 @@
 package com.vaultview.app.ui
 
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -10,6 +12,7 @@ import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -38,7 +41,7 @@ fun DownloadsScreen(onGame: (Game) -> Unit) {
             CenterMessage("Games you download show up here")
         } else {
             LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(Downloads.items, key = { it.key }) { d -> Row(d, onGame) }
+                items(Downloads.items, key = { it.key }) { d -> Box(Modifier.animateItem()) { Row(d, onGame) } }
             }
         }
     }
@@ -57,8 +60,9 @@ private fun Row(d: DownloadItem, onGame: (Game) -> Unit) {
                 Text(statusText(d), color = statusColor(d), style = MaterialTheme.typography.bodySmall, maxLines = 2)
                 if (d.state == DownloadState.DOWNLOADING || d.state == DownloadState.EXTRACTING) {
                     Spacer(Modifier.height(6.dp))
+                    val smooth by animateFloatAsState(d.progress, tween(400), label = "p")
                     if (d.total > 0 || d.state == DownloadState.EXTRACTING)
-                        LinearProgressIndicator(progress = { d.progress }, modifier = Modifier.fillMaxWidth())
+                        LinearProgressIndicator(progress = { smooth }, modifier = Modifier.fillMaxWidth())
                     else LinearProgressIndicator(Modifier.fillMaxWidth())
                 }
             }

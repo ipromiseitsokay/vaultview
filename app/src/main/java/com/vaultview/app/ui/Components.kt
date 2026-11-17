@@ -6,12 +6,16 @@ import android.content.Intent
 import android.net.Uri
 import androidx.browser.customtabs.CustomTabColorSchemeParams
 import androidx.browser.customtabs.CustomTabsIntent
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.LazyGridItemScope
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Star
@@ -55,7 +59,8 @@ fun flag(region: String) = regionFlags[region] ?: region.take(3).uppercase()
 fun CoverArt(id: Int, title: String?, modifier: Modifier = Modifier) {
     // 0 = box art, 1 = screenshot, 2 = nothing available
     var stage by remember(id) { mutableIntStateOf(0) }
-    Box(modifier.background(PanelHi)) {
+    var loaded by remember(id) { mutableStateOf(false) }
+    Box(modifier.then(if (loaded) Modifier.background(PanelHi) else Modifier.shimmer())) {
         if (stage == 2) {
             Box(
                 Modifier.matchParentSize().background(
@@ -80,6 +85,7 @@ fun CoverArt(id: Int, title: String?, modifier: Modifier = Modifier) {
         AsyncImage(
             model = model, contentDescription = title, contentScale = ContentScale.Fit,
             modifier = Modifier.matchParentSize(),
+            onSuccess = { loaded = true },
             onError = { stage++ },
         )
     }
@@ -130,7 +136,34 @@ fun GameGrid(
         modifier = Modifier.fillMaxSize(),
     ) {
         if (header != null) item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) { header() }
-        items(games, key = { it.id }) { g -> GameCard(g, showSystem) { onGame(g) } }
+        items(games, key = { it.id }) { g ->
+            Box(Modifier.animateItem(fadeInSpec = tween(250), placementSpec = spring(stiffness = Spring.StiffnessMediumLow))) {
+                GameCard(g, showSystem) { onGame(g) }
+            }
+        }
+    }
+}
+
+/** Placeholder grid shown while a list loads. */
+@Composable
+fun SkeletonGrid() {
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(if (LocalWide.current) 120.dp else 108.dp),
+        contentPadding = PaddingValues(16.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+        userScrollEnabled = false,
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        items(18) {
+            Column {
+                Box(Modifier.fillMaxWidth().aspectRatio(0.75f).clip(RoundedCornerShape(14.dp)).shimmer())
+                Spacer(Modifier.height(8.dp))
+                Box(Modifier.fillMaxWidth(0.8f).height(10.dp).clip(RoundedCornerShape(5.dp)).shimmer())
+                Spacer(Modifier.height(6.dp))
+                Box(Modifier.fillMaxWidth(0.45f).height(8.dp).clip(RoundedCornerShape(4.dp)).shimmer())
+            }
+        }
     }
 }
 

@@ -125,7 +125,7 @@ fun SystemScreen(code: String, onBack: () -> Unit, onGame: (Game) -> Unit) {
         }
 
         when (val s = state) {
-            Load.Loading -> Spinner()
+            Load.Loading -> SkeletonGrid()
             is Load.Err -> CenterMessage(s.message, "Try again") { retry++ }
             is Load.Ok -> {
                 val shown = if (region == null) s.value else s.value.filter { region in it.regions }
