@@ -10,6 +10,12 @@ An unofficial Android front end for [Vimm's Lair](https://vimm.net/vault), built
 
 Everything (lists, images, game pages and files) comes from vimm.net. This app only presents it differently.
 
+## Installing
+
+1. On your device, open the [latest release](https://github.com/ipromiseitsokay/vaultview/releases/latest) and download `VaultView.apk`.
+2. Open it and allow your browser or file manager to install apps when Android asks.
+3. After that, updates arrive inside the app: an **Update ready** banner appears when a new release is out.
+
 ## Updates
 
 Every push to `main` runs [.github/workflows/release.yml](.github/workflows/release.yml), which tests, builds and signs the APK and publishes it as a release. The app checks the latest release on launch and offers to install it (Settings → Updates).
