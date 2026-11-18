@@ -30,13 +30,34 @@ class MainActivity : ComponentActivity() {
     private val lastMove = LongArray(4)          // per direction, when we last moved
     private var held = 0                         // direction keycode held on the stick/hat
     private var repeater: Runnable? = null
+    // Pacing for held directions: one move per drawn frame, never a backlog, and a stop at the end.
+    private var framePending = false
+    private var lastRepeatAt = 0L
+    private var edge = 0                          // direction that just ran into the end of a list
+    private val frameDone = android.view.Choreographer.FrameCallback { framePending = false }
+
+    /** Sends one move to the UI. Returns false when nothing could take focus that way (an edge). */
+    private fun step(down: KeyEvent): Boolean {
+        framePending = true
+        android.view.Choreographer.getInstance().postFrameCallback(frameDone)
+        val moved = super.dispatchKeyEvent(down)
+        if (moved) Sfx.key(Sfx.Cue.MOVE) else edge = down.keyCode
+        return moved
+    }
     private var lastPress = 0L                  // last A-type or B-type press
     private var lastPressKind = 0               // 1 = select, 2 = back
     private var lastPressCode = 0
     private val swallowUp = mutableSetOf<Int>() // releases of presses we dropped
 
+    companion object {
+        /** The top-screen activity, for the bottom-screen deck to hand stray button presses to. */
+        var current: MainActivity? = null
+            private set
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        current = this
         enableEdgeToEdge()
         setContent { VaultTheme { VaultRoot() } }
         // The app plays its own sounds; turn off Android's clicks so nothing doubles.
@@ -63,11 +84,22 @@ class MainActivity : ComponentActivity() {
         }
         if (dirIndex(code) >= 0) {
             if (event.action == KeyEvent.ACTION_DOWN) {
-                // Many handhelds report the D-pad both as keys and as a hat axis; keep only one.
-                if (event.repeatCount == 0 && recentlyMoved(code)) return true
+                val now = SystemClock.uptimeMillis()
+                if (event.repeatCount == 0) {
+                    // Many handhelds report the D-pad both as keys and as a hat axis; keep only one.
+                    if (recentlyMoved(code)) return true
+                    edge = 0
+                } else {
+                    // Held D-pad: Android repeats fast. Drop repeats (never queue them) while the last
+                    // move is still being drawn, pace them like the stick, and stop at the end of a list.
+                    if (code == edge || framePending || now - lastRepeatAt < 110) return true
+                    lastRepeatAt = now
+                }
                 markMoved(code)
-                Sfx.key(Sfx.Cue.MOVE)
+                step(event)
+                return true
             }
+            if (event.action == KeyEvent.ACTION_UP && code == edge) edge = 0
             return super.dispatchKeyEvent(event)
         }
         // Gamepad A and B are turned into select and back here, exactly once per press.
@@ -149,12 +181,13 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun move(code: Int, fresh: Boolean) {
-        if (fresh && recentlyMoved(code)) return
+        if (fresh) { if (recentlyMoved(code)) return; edge = 0 }
+        else if (code == edge || framePending) return
         markMoved(code)
-        Sfx.key(Sfx.Cue.MOVE)
         val t = SystemClock.uptimeMillis()
-        super.dispatchKeyEvent(KeyEvent(t, t, KeyEvent.ACTION_DOWN, code, 0))
+        val moved = step(KeyEvent(t, t, KeyEvent.ACTION_DOWN, code, 0))
         super.dispatchKeyEvent(KeyEvent(t, t, KeyEvent.ACTION_UP, code, 0))
+        if (!moved) stopRepeat()
     }
 
     private fun startRepeat(code: Int) {
@@ -182,6 +215,20 @@ class MainActivity : ComponentActivity() {
     private fun markMoved(code: Int) { lastMove[dirIndex(code)] = SystemClock.uptimeMillis() }
 
     override fun onPause() { stopRepeat(); held = 0; super.onPause() }
+
+    override fun onDestroy() { if (current === this) current = null; super.onDestroy() }
+
+    override fun onStart() {
+        super.onStart()
+        // Dual-screen handhelds: put the buttons and downloads on the bottom screen.
+        com.vaultview.app.ui.DeckController.show(this)
+    }
+
+    override fun onStop() {
+        // Leaving the app (or starting a game): give the bottom screen back, e.g. to a DS emulator.
+        if (!isChangingConfigurations) com.vaultview.app.ui.DeckController.hide()
+        super.onStop()
+    }
 
     override fun onResume() {
         super.onResume()

@@ -40,6 +40,9 @@ fun SystemScreen(code: String, onBack: () -> Unit, onGame: (Game) -> Unit) {
     val wide = LocalWide.current
     var section by rememberSaveable { mutableStateOf(ALL) }
     var byRating by rememberSaveable { mutableStateOf(true) }
+    // Second screen: letter jumps.
+    SideEffect { Deck.letters = DeckLetters(sections, section) { section = it } }
+    DisposableEffect(code) { onDispose { Deck.letters = null } }
     var pagesDone by remember { mutableIntStateOf(0) }
     val context = androidx.compose.ui.platform.LocalContext.current
     var query by rememberSaveable { mutableStateOf("") }

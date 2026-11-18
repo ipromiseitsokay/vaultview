@@ -115,6 +115,16 @@ fun VaultRoot() {
         launchSingleTop = true
         restoreState = true
     }
+    // Second screen (AYN Thor): what's showing, and what its buttons do.
+    SideEffect {
+        Deck.route = route
+        Deck.ports = ports
+        Deck.onBack = { if (selected != null) selected = null else nav.popBackStack() }
+        Deck.onSearch = { if (!ports) nav.navigate("search") }
+        Deck.onSurprise = { rolling = true }
+        Deck.onSwitch = { switchMode() }
+        Deck.onTab = { r -> (shownTabs.firstOrNull { it.route == r } ?: tabs.firstOrNull { it.route == r })?.let { go(it) } }
+    }
 
     CompositionLocalProvider(LocalWide provides wide) {
         if (wide) {

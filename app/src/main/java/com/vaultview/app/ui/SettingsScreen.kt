@@ -58,6 +58,16 @@ fun SettingsScreen() {
             }
         }
 
+        Section("Second screen") {
+            val context = androidx.compose.ui.platform.LocalContext.current
+            val found = remember { DeckController.secondDisplay(context) != null }
+            Toggle("Use the bottom screen", if (found) "Download button, letter jumps and the download queue go on your second screen"
+                else "For dual-screen handhelds like the AYN Thor. No second screen found on this device.", Settings.secondScreen) {
+                Settings.updateSecondScreen(it)
+                val act = context as? android.app.Activity
+                if (it && act != null) DeckController.show(act) else DeckController.hide()
+            }
+        }
         Section("Emulators") {
             val systems = Library.games.mapNotNull { it.system }.distinct().sortedWith(compareBy({ it.brand.ordinal }, { it.year }))
             var picking by remember { mutableStateOf<com.vaultview.app.data.GameSystem?>(null) }

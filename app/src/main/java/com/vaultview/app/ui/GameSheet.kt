@@ -37,6 +37,10 @@ fun GameSheet(game: Game, onDismiss: () -> Unit, onGet: () -> Unit) {
     val wide = LocalWide.current
     val saved = Favorites.contains(game.id)
     val getFocus = remember { FocusRequester() }
+    androidx.compose.runtime.DisposableEffect(game.id) {
+        Deck.sheet = DeckGame(game, "Get game", "Opens its download page", onGet)
+        onDispose { if (Deck.sheet?.game?.id == game.id) Deck.sheet = null }
+    }
 
     val info: @Composable ColumnScope.() -> Unit = {
         Text(game.title, style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.ExtraBold)

@@ -59,6 +59,7 @@ import com.vaultview.app.data.DownloadItem
 import com.vaultview.app.data.DownloadRequest
 import com.vaultview.app.data.DownloadState
 import com.vaultview.app.data.Downloads
+import com.vaultview.app.data.Game
 import com.vaultview.app.data.Settings
 import com.vaultview.app.data.Systems
 import com.vaultview.app.data.Vimm
@@ -223,6 +224,23 @@ fun GameScreen(id: Int, title: String, system: String?, onBack: () -> Unit, onSh
         onDispose { WebHost.release(listener) }
     }
     SideEffect { WebHost.showing = showPage }
+
+    // Second screen: this game's main button.
+    val deckGame = Game(id, title, sys?.name ?: system)
+    SideEffect {
+        val p = phase
+        Deck.page = when {
+            mine?.active == true -> DeckGame(deckGame, "Downloading ${(mine.progress * 100).toInt()}%", null, onShowDownloads)
+            p is Phase.Ready -> DeckGame(deckGame, if (mine?.state == DownloadState.DONE) "Download again" else "Download", p.info.size) {
+                val fields = p.info.fields.map { if (it.first == "mediaId" && version != null) it.first to version!! else it }
+                request(DownloadRequest(p.info.action, p.info.method, fields, pageUrl, ua))
+            }
+            p is Phase.NeedsCheck || checkWaiting -> DeckGame(deckGame, "Do the check", "vimm.net wants a quick tap up top") { showPage = true }
+            p is Phase.Problem -> DeckGame(deckGame, "Not available", p.message, null)
+            else -> DeckGame(deckGame, "Getting download info…", null, null)
+        }
+    }
+    DisposableEffect(id) { onDispose { Deck.page = null } }
 
     // Transparent while the real page is showing, so it can be seen behind this screen.
     Box(Modifier.fillMaxSize().background(if (showPage) Color.Transparent else Bg)) {

@@ -17,6 +17,8 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
 
 /**
  * The one vimm.net page the app keeps open behind its own screens.
@@ -68,7 +70,8 @@ object WebHost {
         // Transparent: the screens in front give the dark colour, and nothing can bleed past them.
         setBackgroundColor(android.graphics.Color.TRANSPARENT)
         isSoundEffectsEnabled = false
-        visibility = View.INVISIBLE
+        // Always VISIBLE: vimm.net's Cloudflare check only finishes on a page that's being drawn.
+        // The app covers it with an opaque layer instead (see Host below).
         settings.javaScriptEnabled = true
         settings.domStorageEnabled = true
         CookieManager.getInstance().setAcceptCookie(true)
@@ -103,10 +106,18 @@ object WebHost {
     /** Lives in the root layout, under every screen, for as long as the activity does. */
     @Composable
     fun Host(modifier: Modifier = Modifier) {
+        Box(modifier) {
+            Page(Modifier.matchParentSize())
+            // Opaque cover while the page isn't wanted: it keeps rendering (so checks complete), unseen.
+            if (!showing) Box(Modifier.matchParentSize().background(Bg))
+        }
+    }
+
+    @Composable
+    private fun Page(modifier: Modifier) {
         AndroidView(
             factory = { ctx -> create(ctx).also { view = it; loadedUrl = null; finished = false } },
             update = { w ->
-                w.visibility = if (showing) View.VISIBLE else View.INVISIBLE
                 // While hidden, the page must not take the D-pad either.
                 w.isFocusable = showing
                 w.isFocusableInTouchMode = showing

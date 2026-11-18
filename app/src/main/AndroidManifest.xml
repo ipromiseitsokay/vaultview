@@ -77,6 +77,16 @@
             </intent-filter>
         </activity>
 
+        <!-- Bottom-screen deck for dual-screen handhelds (AYN Thor). Its own task, never in Recents. -->
+        <activity
+            android:name=".ui.DeckActivity"
+            android:exported="false"
+            android:taskAffinity="${applicationId}.deck"
+            android:excludeFromRecents="true"
+            android:resizeableActivity="true"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboard|keyboardHidden|navigation|density"
+            android:theme="@style/Theme.VaultView" />
+
         <service
             android:name=".data.DownloadService"
             android:exported="false"
