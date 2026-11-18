@@ -19,3 +19,6 @@
 -dontwarn org.bouncycastle.**
 -dontwarn org.openjsse.**
 -dontwarn com.google.re2j.**
+
+# 7-Zip-JBinding calls back into these classes from native code.
+-keep class net.sf.sevenzipjbinding.** { *; }

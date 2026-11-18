@@ -9,6 +9,8 @@ android {
     compileSdk = 34
 
     defaultConfig {
+        // Handhelds are 64-bit ARM; x86_64 is only for local emulator testing. Keeps the native 7-Zip small.
+        ndk { abiFilters += if (System.getenv("CI") == "true") listOf("arm64-v8a") else listOf("arm64-v8a", "x86_64") }
         applicationId = "com.vaultview.app"
         minSdk = 26
         targetSdk = 34
@@ -65,7 +67,9 @@ dependencies {
     implementation("androidx.documentfile:documentfile:1.0.1")
     implementation("androidx.webkit:webkit:1.11.0")
     implementation("org.apache.commons:commons-compress:1.26.2")
-    implementation("org.tukaani:xz:1.9")
+    implementation("org.tukaani:xz:1.10")
+    // Native 7-Zip engine for fast unpacking (falls back to commons-compress if it can't load).
+    implementation("com.github.omicronapps:7-Zip-JBinding-4Android:Release-16.02-2.03")
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20240303")
 }

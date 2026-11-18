@@ -202,7 +202,9 @@ fun GameScreen(id: Int, title: String, system: String?, onBack: () -> Unit, onSh
             modifier = Modifier.fillMaxSize().padding(top = 64.dp),
             factory = { ctx ->
                 WebView(ctx).apply {
-                    setBackgroundColor(Bg.toArgb()) // no white flash while pages load
+                    // Transparent, not Bg: a new WebView paints its background over the whole window (side rail
+                    // included) for a frame or two before it's laid out. The Box behind already gives the dark colour.
+                    setBackgroundColor(android.graphics.Color.TRANSPARENT)
                     isSoundEffectsEnabled = false
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true

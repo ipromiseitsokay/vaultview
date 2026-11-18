@@ -22,6 +22,26 @@ object Extractor {
         sink: FileSink,
         onProgress: (Float) -> Unit = {},
         isCancelled: () -> Boolean = { false },
+    ): List<String> {
+        if (NativeExtractor.available) {
+            try {
+                return NativeExtractor.extract(archive, sink, onProgress, isCancelled)
+            } catch (e: InterruptedException) {
+                throw e
+            } catch (e: Throwable) {
+                // Fall through to the Java unpacker; it overwrites anything half-written.
+                android.util.Log.w("Extractor", "Native unpack failed, using fallback", e)
+            }
+        }
+        return extractJava(archive, sink, onProgress, isCancelled)
+    }
+
+    /** Pure-Java unpacking: slower, but works everywhere (and in unit tests). */
+    fun extractJava(
+        archive: File,
+        sink: FileSink,
+        onProgress: (Float) -> Unit = {},
+        isCancelled: () -> Boolean = { false },
     ): List<String> = when {
         archive.name.endsWith(".zip", true) -> extractZip(archive, sink, onProgress, isCancelled)
         archive.name.endsWith(".7z", true) -> extract7z(archive, sink, onProgress, isCancelled)
@@ -43,7 +63,7 @@ object Extractor {
             for (e in entries) {
                 val path = safePath(e.name) ?: continue
                 zip.getInputStream(e).use { input ->
-                    sink.create(path).use { out -> done = copy(input, out, done, total, onProgress, isCancelled) }
+                    java.io.BufferedOutputStream(sink.create(path), 1 shl 20).use { out -> done = copy(input, out, done, total, onProgress, isCancelled) }
                 }
                 written += path
             }
@@ -57,12 +77,12 @@ object Extractor {
             val total = sz.entries.filter { !it.isDirectory }.sumOf { it.size }.coerceAtLeast(1)
             var done = 0L
             var entry = sz.nextEntry
-            val buf = ByteArray(1 shl 16)
+            val buf = ByteArray(1 shl 20)
             while (entry != null) {
                 if (!entry.isDirectory) {
                     val path = safePath(entry.name)
                     if (path != null) {
-                        sink.create(path).use { out ->
+                        java.io.BufferedOutputStream(sink.create(path), 1 shl 20).use { out ->
                             while (true) {
                                 if (isCancelled()) throw InterruptedException("Cancelled")
                                 val n = sz.read(buf)
@@ -83,7 +103,7 @@ object Extractor {
 
     private fun copy(input: InputStream, out: OutputStream, start: Long, total: Long,
                      onProgress: (Float) -> Unit, isCancelled: () -> Boolean): Long {
-        val buf = ByteArray(1 shl 16)
+        val buf = ByteArray(1 shl 20)
         var done = start
         while (true) {
             if (isCancelled()) throw InterruptedException("Cancelled")
