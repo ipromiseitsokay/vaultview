@@ -170,11 +170,13 @@ fun RandomSheet(onDismiss: () -> Unit, onGame: (Game) -> Unit, onOwned: (Library
             }
         }
         val rollButton: @Composable () -> Unit = {
-            val label = if (result == null) "🎲  Roll" else "🎲  Roll again"
-            val mod = Modifier.fillMaxWidth().height(if (result == null) 52.dp else 44.dp).focusRing(RoundedCornerShape(16.dp), 1.02f).focusRequester(rollFocus)
-            if (result == null) Button(onClick = { roll() }, enabled = !rolling, modifier = mod, shape = RoundedCornerShape(16.dp)) {
+            val label = if (result == null) "Roll" else "Roll again"
+            val mod = Modifier.fillMaxWidth().height(if (result == null) 52.dp else 44.dp).focusRing(RoundedCornerShape(12.dp), 1.02f).focusRequester(rollFocus)
+            if (result == null) Button(onClick = { roll() }, enabled = !rolling, modifier = mod, shape = RoundedCornerShape(12.dp)) {
+                Icon(DiceIcon, null, Modifier.size(20.dp)); Spacer(Modifier.width(10.dp))
                 Text(label, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
-            } else FilledTonalButton(onClick = { roll() }, enabled = !rolling, modifier = mod, shape = RoundedCornerShape(16.dp)) {
+            } else FilledTonalButton(onClick = { roll() }, enabled = !rolling, modifier = mod, shape = RoundedCornerShape(12.dp)) {
+                Icon(DiceIcon, null, Modifier.size(18.dp)); Spacer(Modifier.width(10.dp))
                 Text(label, fontWeight = FontWeight.Bold)
             }
             problem?.let { Text(it, color = Muted, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp)) }

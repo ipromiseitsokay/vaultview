@@ -51,10 +51,8 @@ fun SearchScreen(onGame: (Game) -> Unit, onBack: () -> Unit) {
             autoFocus = true,
         )
         Box(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-            FilledTonalButton(onClick = { menu = true }, modifier = Modifier.focusRing(androidx.compose.foundation.shape.RoundedCornerShape(50))) {
-                Text(system?.let { Systems.byCode(it)?.name } ?: "All systems")
-                Icon(Icons.Filled.ArrowDropDown, null)
-            }
+            ToolButton(system?.let { Systems.byCode(it)?.name } ?: "All systems", { menu = true },
+                icon = BrowseIcon, trailing = Icons.Filled.ArrowDropDown)
             DropdownMenu(expanded = menu, onDismissRequest = { menu = false }) {
                 DropdownMenuItem(text = { Text("All systems") }, onClick = { system = null; menu = false })
                 Systems.all.forEach { s ->

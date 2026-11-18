@@ -61,6 +61,48 @@ object Installer {
         byName.getValue(name)
     }
 
+    fun canInstall(context: Context): Boolean {
+        if (context.packageManager.canRequestPackageInstalls()) return true
+        context.startActivity(
+            Intent(AndroidSettings.ACTION_MANAGE_UNKNOWN_APP_SOURCES, Uri.parse("package:${context.packageName}"))
+                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+        return false
+    }
+
+    /** Downloads [url] to [out], reporting progress 0..1 on the main thread. */
+    suspend fun fetch(url: String, out: File, onProgress: (Float) -> Unit) = withContext(Dispatchers.IO) {
+        http.newCall(Request.Builder().url(url).build()).execute().use { r ->
+            if (!r.isSuccessful) throw IOException("Download failed (HTTP ${r.code})")
+            val body = r.body!!; val total = body.contentLength()
+            out.outputStream().use { o ->
+                body.byteStream().use { i ->
+                    val buf = ByteArray(1 shl 16); var done = 0L; var last = 0L
+                    while (true) {
+                        val n = i.read(buf); if (n < 0) break
+                        o.write(buf, 0, n); done += n
+                        val now = System.currentTimeMillis()
+                        if (total > 0 && now - last > 200) { last = now; withContext(Dispatchers.Main) { onProgress(done.toFloat() / total) } }
+                    }
+                }
+            }
+        }
+    }
+
+    fun openInstaller(context: Context, apk: File) {
+        val uri = FileProvider.getUriForFile(context, "${context.packageName}.files", apk)
+        context.startActivity(
+            Intent(Intent.ACTION_VIEW).setDataAndType(uri, "application/vnd.android.package-archive")
+                .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
+        )
+    }
+
+    /** Gets an app from a GitHub project's latest release (used for Quiver Launcher itself). */
+    suspend fun installGitHub(context: Context, id: String, repo: String, pick: (List<String>) -> String?) {
+        messages.remove(id)
+        download(context, id) { latestGitHubApk(Emulators.Source.GitHub(repo, pick)) }
+    }
+
     private suspend fun download(context: Context, id: String, url: suspend () -> String) {
         if (!context.packageManager.canRequestPackageInstalls()) {
             messages[id] = "Allow VaultView to install apps, then press Install again"

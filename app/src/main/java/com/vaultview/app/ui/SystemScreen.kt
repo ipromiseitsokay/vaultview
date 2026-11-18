@@ -159,17 +159,16 @@ fun SystemScreen(code: String, onBack: () -> Unit, onGame: (Game) -> Unit) {
                 if (section == ALL && submitted.isBlank()) {
                     val p = com.vaultview.app.data.ArtSaver.progress[code]
                     val saved = remember(p) { com.vaultview.app.data.ArtSaver.isSaved(context, code) }
-                    TextButton(
-                        onClick = { com.vaultview.app.data.ArtSaver.save(context, code, raw) },
-                        enabled = p == null && raw.isNotEmpty(),
-                        modifier = Modifier.focusRing(RoundedCornerShape(50), 1.04f),
-                    ) {
-                        Text(when {
+                    ToolButton(
+                        when {
                             p != null -> "Saving art ${(p * 100).toInt()}%"
-                            saved -> "Art saved ✓"
+                            saved -> "Art saved"
                             else -> "Save art offline"
-                        })
-                    }
+                        },
+                        { com.vaultview.app.data.ArtSaver.save(context, code, raw) },
+                        icon = SaveArtIcon,
+                        enabled = p == null && raw.isNotEmpty(),
+                    )
                     Spacer(Modifier.width(8.dp))
                 }
                 SortToggle(byRating) { byRating = it }
@@ -203,12 +202,9 @@ private fun RegionPicker(regions: List<String>, selected: String?, onPick: (Stri
     if (regions.size < 2 && selected == null) return
     var open by remember { mutableStateOf(false) }
     Box {
-        FilledTonalButton(onClick = { open = true }, modifier = Modifier.focusRing(RoundedCornerShape(50))) {
-            Text(selected?.let { "${flag(it)} $it" } ?: "🌐 All regions", maxLines = 1)
-            Icon(Icons.Filled.ArrowDropDown, null)
-        }
+        ToolButton(selected ?: "All regions", { open = true }, icon = GlobeIcon, trailing = Icons.Filled.ArrowDropDown)
         DropdownMenu(expanded = open, onDismissRequest = { open = false }) {
-            DropdownMenuItem(text = { Text("🌐 All regions") }, onClick = { onPick(null); open = false })
+            DropdownMenuItem(text = { Text("All regions") }, onClick = { onPick(null); open = false })
             regions.forEach { r ->
                 DropdownMenuItem(text = { Text("${flag(r)} $r") }, onClick = { onPick(r); open = false })
             }
@@ -216,21 +212,10 @@ private fun RegionPicker(regions: List<String>, selected: String?, onPick: (Stri
     }
 }
 
-/** "Top rated" / "A–Z" segmented switch. */
+/** "Top rated" / "A–Z" switch. */
 @Composable
 private fun SortToggle(byRating: Boolean, onChange: (Boolean) -> Unit) {
-    SingleChoiceSegmentedButtonRow(Modifier.width(330.dp)) {
-        SegmentedButton(
-            selected = byRating, onClick = { onChange(true) },
-            shape = SegmentedButtonDefaults.itemShape(0, 2),
-            modifier = Modifier.focusRing(RoundedCornerShape(50), 1.04f),
-        ) { Text("★ Top rated", maxLines = 1, softWrap = false) }
-        SegmentedButton(
-            selected = !byRating, onClick = { onChange(false) },
-            shape = SegmentedButtonDefaults.itemShape(1, 2),
-            modifier = Modifier.focusRing(RoundedCornerShape(50), 1.04f),
-        ) { Text("A–Z") }
-    }
+    ToolSwitch(listOf("Top rated", "A–Z"), if (byRating) 0 else 1, { onChange(it == 0) })
 }
 
 /** Re-releases, chips, pirates, demos and the like: they tend to have a perfect score from a vote or two. */

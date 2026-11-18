@@ -16,6 +16,7 @@ class ImageTest {
             assertEquals(404, code(Vimm.boxArt(40457), accept))
             assertEquals(404, code(Vimm.boxArt(39288), accept))
             assertEquals(404, code(Vimm.screenshot(39288), accept))
+            assertEquals(404, code(Vimm.boxArt(16035), accept)) // Xbox: a third placeholder
         }
     }
 

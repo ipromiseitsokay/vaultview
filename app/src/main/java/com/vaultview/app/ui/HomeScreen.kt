@@ -90,21 +90,9 @@ fun HomeScreen(onSystem: (String) -> Unit, onGame: (Game) -> Unit, onSearch: () 
                     }
                 }
                 // Surprise me and Search, top right of Browse.
-                FilledTonalButton(
-                    onClick = onRandom,
-                    modifier = Modifier.focusRing(RoundedCornerShape(50)),
-                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
-                ) { Text("🎲  Surprise me", fontWeight = FontWeight.Bold) }
+                ToolButton("Surprise me", onRandom, icon = DiceIcon)
                 Spacer(Modifier.width(10.dp))
-                FilledTonalButton(
-                    onClick = onSearch,
-                    modifier = Modifier.focusRing(RoundedCornerShape(50)),
-                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
-                ) {
-                    Icon(Icons.Filled.Search, null)
-                    Spacer(Modifier.width(8.dp))
-                    Text("Search", fontWeight = FontWeight.Bold)
-                }
+                ToolButton("Search", onSearch, icon = SearchLineIcon)
             }
         }
         if (gotd != null) {
@@ -192,28 +180,26 @@ private fun BrandPicker(selected: Brand?, wide: Boolean, onPick: (Brand?) -> Uni
 
 @Composable
 private fun BrandTile(label: String, count: Int, color: Color, active: Boolean, wide: Boolean, onClick: () -> Unit) {
-    val shape = RoundedCornerShape(16.dp)
-    val fill by animateColorAsState(if (active) color else Panel, tween(300), label = "fill")
-    val edge by animateColorAsState(if (active) Color.Transparent else color.copy(alpha = 0.45f), tween(300), label = "edge")
-    val grow by animateFloatAsState(if (active) 1.04f else 1f, spring(dampingRatio = 0.55f, stiffness = Spring.StiffnessMediumLow), label = "grow")
-    Column(
+    // Flat plate with a strip of the maker's colour down the left edge; the chosen one is tinted.
+    val shape = RoundedCornerShape(10.dp)
+    val fill by animateColorAsState(if (active) color.copy(alpha = 0.28f) else Panel, tween(250), label = "fill")
+    val edge by animateColorAsState(if (active) color.copy(alpha = 0.9f) else Color.White.copy(alpha = 0.08f), tween(250), label = "edge")
+    Row(
         Modifier
-            .graphicsLayer { scaleX = grow; scaleY = grow }
-            .width(118.dp)
-            .height(if (wide) 64.dp else 76.dp)
-            .focusRing(shape)
+            .width(150.dp)
+            .height(if (wide) 56.dp else 64.dp)
+            .focusRing(shape, 1.04f)
             .clip(shape)
-            .background(Brush.linearGradient(listOf(fill, fill.copy(alpha = if (active) 0.55f else 1f))))
+            .background(fill)
             .border(BorderStroke(1.dp, edge), shape)
-            .clickable(onClick = onClick)
-            .padding(if (wide) 10.dp else 12.dp),
-        verticalArrangement = Arrangement.SpaceBetween,
+            .clickable(onClick = onClick),
+        verticalAlignment = Alignment.CenterVertically,
     ) {
-        Emblem(label, color, active)
-        Column {
-            Text(label, fontWeight = FontWeight.Bold, color = Color.White, style = MaterialTheme.typography.titleSmall)
+        Box(Modifier.width(4.dp).fillMaxHeight().background(color))
+        Column(Modifier.padding(horizontal = 12.dp)) {
+            Text(label, fontWeight = FontWeight.Bold, color = Color.White, style = MaterialTheme.typography.titleSmall, maxLines = 1)
             Text("$count systems", style = MaterialTheme.typography.labelSmall,
-                color = if (active) Color.White.copy(alpha = 0.8f) else Muted)
+                color = if (active) Color.White.copy(alpha = 0.75f) else Muted)
         }
     }
 }
@@ -288,22 +274,6 @@ private fun ContinueCard(g: com.vaultview.app.data.LibraryGame, onClick: () -> U
             Spacer(Modifier.height(6.dp))
             rec?.let { Text("▶ " + com.vaultview.app.data.Playtime.format(it.seconds), color = VimmTitle, style = MaterialTheme.typography.labelMedium) }
         }
-    }
-}
-
-/** Short badge for each manufacturer, in its colour. */
-private val emblems = mapOf("All" to "★", "Nintendo" to "N", "PlayStation" to "PS", "Sega" to "S", "Xbox" to "X",
-    "Atari" to "A", "NEC" to "TG", "Philips" to "CDi")
-
-@Composable
-private fun Emblem(label: String, color: Color, active: Boolean) {
-    Box(
-        Modifier.size(26.dp).clip(RoundedCornerShape(50))
-            .then(if (active) Modifier.background(Color.White) else Modifier.background(Brush.linearGradient(listOf(color, color.copy(alpha = 0.6f))))),
-        contentAlignment = Alignment.Center,
-    ) {
-        Text(emblems[label] ?: label.take(1), color = if (active) color else Color.White, fontWeight = FontWeight.Black,
-            style = MaterialTheme.typography.labelSmall)
     }
 }
 

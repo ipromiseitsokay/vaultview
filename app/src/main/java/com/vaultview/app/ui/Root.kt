@@ -27,6 +27,8 @@ import com.vaultview.app.R
 import com.vaultview.app.Sfx
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.clickable
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Home
@@ -82,6 +84,18 @@ fun VaultRoot() {
             .maxByOrNull { it.second }?.first?.let { owned = it }
     }
     val onGame: (Game) -> Unit = { Sfx.tap(Sfx.Cue.SELECT); selected = it }
+    // Tapping the logo switches the first tab between the Vault and Ports.
+    var ports by rememberSaveable { mutableStateOf(false) }
+    val shownTabs = if (ports) listOf(Tab("ports", "Ports", PortsIcon)) + tabs.drop(1) else tabs
+    fun switchMode() {
+        Sfx.tap(Sfx.Cue.SELECT)
+        ports = !ports
+        nav.navigate(if (ports) "ports" else "home") {
+            popUpTo(nav.graph.findStartDestination().id) { saveState = true }
+            launchSingleTop = true
+            restoreState = true
+        }
+    }
     val config = LocalConfiguration.current
     val wide = config.screenWidthDp > config.screenHeightDp
 
@@ -95,7 +109,7 @@ fun VaultRoot() {
     // Only changes when a download starts or ends, not on every progress tick, so the menu doesn't redraw constantly.
     val activeDownloads by remember { derivedStateOf { Downloads.items.count { it.active } } }
     fun isActive(t: Tab) = route?.substringBefore('/')?.substringBefore('?') == t.route ||
-        (t.route == "home" && (route?.startsWith("system/") == true || route?.startsWith("game/") == true || route == "search"))
+        ((t.route == "home" || t.route == "ports") && (route?.startsWith("system/") == true || route?.startsWith("game/") == true || route == "search"))
     fun go(t: Tab) = nav.navigate(t.route) {
         popUpTo(nav.graph.findStartDestination().id) { saveState = true }
         launchSingleTop = true
@@ -109,13 +123,13 @@ fun VaultRoot() {
                 NavigationRail(
                     containerColor = Color.Transparent,
                     modifier = Modifier.fillMaxHeight()
-                        .background(Brush.verticalGradient(listOf(VimmMaroon, VimmMaroonDeep)))
-                        .drawBehind { drawRect(VimmRed.copy(alpha = 0.6f), topLeft = Offset(size.width - 2.dp.toPx(), 0f), size = Size(2.dp.toPx(), size.height)) },
+                        .background(Brush.verticalGradient(if (ports) listOf(PortsTop, VimmNavy) else listOf(VimmMaroon, VimmMaroonDeep)))
+                        .drawBehind { drawRect((if (ports) Accent else VimmRed).copy(alpha = 0.6f), topLeft = Offset(size.width - 2.dp.toPx(), 0f), size = Size(2.dp.toPx(), size.height)) },
                 ) {
                     Spacer(Modifier.height(6.dp))
-                    Logo()
+                    ModeSwitch(ports) { switchMode() }
                     Spacer(Modifier.weight(1f).heightIn(min = 6.dp))
-                    tabs.forEach { t ->
+                    shownTabs.forEach { t ->
                         NavigationRailItem(
                             selected = isActive(t), onClick = { Sfx.tap(Sfx.Cue.SELECT); go(t) },
                             icon = { TabIcon(t, activeDownloads, isActive(t)) },
@@ -128,7 +142,11 @@ fun VaultRoot() {
                 }
                 Column(Modifier.weight(1f)) {
                     UpdateBanner()
-                    Host(nav, onGame, { owned = it }, { rolling = true }, Modifier.weight(1f))
+                    Box(Modifier.weight(1f)) {
+                        // The one vimm.net page, under every screen (64dp leaves the game page's top bar clear).
+                        WebHost.Host(Modifier.fillMaxSize().padding(top = 64.dp))
+                        Host(nav, onGame, { owned = it }, { rolling = true }, Modifier.fillMaxSize())
+                    }
                 }
             }
             }
@@ -153,7 +171,11 @@ fun VaultRoot() {
             ) { pad ->
                 Column(Modifier.padding(pad)) {
                     UpdateBanner()
-                    Host(nav, onGame, { owned = it }, { rolling = true }, Modifier.weight(1f))
+                    Box(Modifier.weight(1f)) {
+                        // The one vimm.net page, under every screen (64dp leaves the game page's top bar clear).
+                        WebHost.Host(Modifier.fillMaxSize().padding(top = 64.dp))
+                        Host(nav, onGame, { owned = it }, { rolling = true }, Modifier.fillMaxSize())
+                    }
                 }
             }
         }
@@ -209,6 +231,7 @@ private fun Host(nav: NavHostController, onGame: (Game) -> Unit, onOwned: (com.v
         composable("system/{code}") { e ->
             SystemScreen(e.arguments?.getString("code").orEmpty(), onBack = { nav.popBackStack() }, onGame = onGame)
         }
+        composable("ports") { PortsScreen(onGame) }
         composable("search") { SearchScreen(onGame, onBack = { nav.popBackStack() }) }
         composable("library") { LibraryScreen(onOpen = { Sfx.tap(Sfx.Cue.SELECT); onOwned(it) }) }
         composable("saved") { SavedScreen(onGame) }
@@ -246,13 +269,30 @@ private fun TabIconInner(t: Tab, activeDownloads: Int) {
     } else Icon(t.icon, null)
 }
 
+private val PortsTop = Color(0xFF0B1A5C)
+
+/** The Vimm's Lair logo, which also flips between the Vault and Ports. */
 @Composable
-private fun Logo() {
-    Image(
-        painter = painterResource(R.drawable.vimm_logo),
-        contentDescription = "Vimm's Lair",
-        modifier = Modifier.size(44.dp).shadow(10.dp, CircleShape, ambientColor = VimmRed, spotColor = VimmRed),
-    )
+private fun ModeSwitch(ports: Boolean, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(12.dp)
+    Column(
+        Modifier.focusRing(shape, 1.05f).clip(shape).clickable(onClickLabel = if (ports) "Switch to the Vault" else "Switch to Ports", onClick = onClick)
+            .padding(horizontal = 8.dp, vertical = 4.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+    ) {
+        Image(
+            painter = painterResource(R.drawable.vimm_logo),
+            contentDescription = "Vimm's Lair",
+            modifier = Modifier.size(40.dp).shadow(10.dp, CircleShape, ambientColor = if (ports) Accent else VimmRed, spotColor = if (ports) Accent else VimmRed),
+        )
+        Spacer(Modifier.height(2.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Icon(SwapIcon, null, Modifier.size(12.dp), tint = VimmSilver)
+            Spacer(Modifier.width(3.dp))
+            Text(if (ports) "PORTS" else "VAULT", color = VimmTitle, fontWeight = FontWeight.Black,
+                style = MaterialTheme.typography.labelSmall, letterSpacing = androidx.compose.ui.unit.TextUnit(1.2f, androidx.compose.ui.unit.TextUnitType.Sp))
+        }
+    }
 }
 
 /** Navy pill with a white edge for the selected tab, like the site's rounded panels; silver text otherwise. */

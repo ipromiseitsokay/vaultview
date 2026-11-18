@@ -61,8 +61,8 @@ fun GameSheet(game: Game, onDismiss: () -> Unit, onGet: () -> Unit) {
     val buttons: @Composable ColumnScope.() -> Unit = {
         Button(
             onClick = onGet,
-            modifier = Modifier.fillMaxWidth().height(52.dp).focusRing(RoundedCornerShape(14.dp), 1.02f).focusRequester(getFocus),
-            shape = RoundedCornerShape(14.dp),
+            modifier = Modifier.fillMaxWidth().height(52.dp).focusRing(RoundedCornerShape(12.dp), 1.02f).focusRequester(getFocus),
+            shape = RoundedCornerShape(12.dp),
         ) {
             Icon(DownloadIcon, null)
             Spacer(Modifier.width(8.dp))
@@ -70,13 +70,13 @@ fun GameSheet(game: Game, onDismiss: () -> Unit, onGet: () -> Unit) {
         }
         Spacer(Modifier.height(8.dp))
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            OutlinedButton(onClick = { Favorites.toggle(game) }, modifier = Modifier.weight(1f).height(48.dp).focusRing(RoundedCornerShape(14.dp), 1.02f), shape = RoundedCornerShape(14.dp)) {
+            OutlinedButton(onClick = { Favorites.toggle(game) }, modifier = Modifier.weight(1f).height(48.dp).focusRing(RoundedCornerShape(12.dp), 1.02f), shape = RoundedCornerShape(12.dp)) {
                 Icon(if (saved) Icons.Filled.Favorite else Icons.Filled.FavoriteBorder, null,
                     tint = if (saved) Color(0xFFFF6B81) else LocalContentColor.current)
                 Spacer(Modifier.width(6.dp))
                 Text(if (saved) "Saved" else "Save")
             }
-            OutlinedButton(onClick = { openOnSite(context, Vimm.gamePage(game.id)) }, modifier = Modifier.weight(1f).height(48.dp).focusRing(RoundedCornerShape(14.dp), 1.02f), shape = RoundedCornerShape(14.dp)) {
+            OutlinedButton(onClick = { openOnSite(context, Vimm.gamePage(game.id)) }, modifier = Modifier.weight(1f).height(48.dp).focusRing(RoundedCornerShape(12.dp), 1.02f), shape = RoundedCornerShape(12.dp)) {
                 Icon(Icons.Filled.Share, null)
                 Spacer(Modifier.width(6.dp))
                 Text("Web", maxLines = 1)

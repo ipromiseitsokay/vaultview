@@ -97,7 +97,21 @@ fun CoverArt(
         AsyncImage(
             model = model, contentDescription = title, contentScale = ContentScale.Fit,
             modifier = Modifier.matchParentSize(),
-            onSuccess = { loaded = true },
+            onSuccess = { st ->
+                // Art cached before the app knew about every vimm "not found" picture: those files
+                // are tiny. Drop them from the cache and move on to the next source.
+                val r = st.result
+                val key = r.diskCacheKey
+                val stale = r.dataSource == coil.decode.DataSource.DISK && key != null && model.contains("image.php") &&
+                    runCatching {
+                        coil.Coil.imageLoader(ctx).diskCache?.openSnapshot(key)?.use { it.data.toFile().length() < 4096 }
+                    }.getOrNull() == true
+                if (stale) {
+                    coil.Coil.imageLoader(ctx).diskCache?.remove(key!!)
+                    r.memoryCacheKey?.let { coil.Coil.imageLoader(ctx).memoryCache?.remove(it) }
+                    stage++
+                } else loaded = true
+            },
             onError = { stage++ },
         )
     }

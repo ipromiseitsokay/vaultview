@@ -151,14 +151,13 @@ fun GameScreen(id: Int, title: String, system: String?, onBack: () -> Unit, onSh
     val wide = LocalWide.current
     val pageUrl = Vimm.gamePage(id)
     val sys = Systems.find(system)
-    var web by remember { mutableStateOf<WebView?>(null) }
     var phase by remember { mutableStateOf<Phase>(Phase.Loading) }
     var showPage by remember { mutableStateOf(false) }
     var checkWaiting by remember { mutableStateOf(false) }
     var version by remember { mutableStateOf<String?>(null) }
     var pending by remember { mutableStateOf<DownloadRequest?>(null) }
     var askFolder by remember { mutableStateOf(false) }
-    var ua by remember { mutableStateOf("") }
+    val ua = WebHost.userAgent
     val active = Downloads.items.count { it.active }
     val mine = Downloads.items.firstOrNull { it.gameId == id }
     val downloadFocus = remember { FocusRequester() }
@@ -192,67 +191,41 @@ fun GameScreen(id: Int, title: String, system: String?, onBack: () -> Unit, onSh
             else -> phase = p
         }
     }
-    fun reload() { phase = Phase.Loading; web?.reload() }
+    fun reload() { phase = Phase.Loading; WebHost.reload() }
 
     BackHandler { if (showPage && phase is Phase.Ready) showPage = false else onBack() }
 
-    Box(Modifier.fillMaxSize().background(Bg)) {
-        // The real page. Hidden behind the native screen unless the human check needs a tap.
-        AndroidView(
-            modifier = Modifier.fillMaxSize().padding(top = 64.dp),
-            factory = { ctx ->
-                WebView(ctx).apply {
-                    // Transparent, not Bg: a new WebView paints its background over the whole window (side rail
-                    // included) for a frame or two before it's laid out. The Box behind already gives the dark colour.
-                    setBackgroundColor(android.graphics.Color.TRANSPARENT)
-                    isSoundEffectsEnabled = false
-                    settings.javaScriptEnabled = true
-                    settings.domStorageEnabled = true
-                    CookieManager.getInstance().setAcceptCookie(true)
-                    CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
-                    ua = settings.userAgentString
-                    val main = Handler(Looper.getMainLooper())
-                    addJavascriptInterface(object {
-                        @JavascriptInterface
-                        fun download(url: String, method: String, fieldsJson: String) {
-                            val a = org.json.JSONArray(fieldsJson)
-                            val fields = (0 until a.length()).map { a.getJSONArray(it).let { p -> p.getString(0) to p.getString(1) } }
-                            main.post { request(DownloadRequest(url, method, fields, pageUrl, ua)) }
-                        }
-                    }, "VaultView")
-                    setDownloadListener { url, userAgent, _, _, _ ->
-                        request(DownloadRequest(url, "GET", emptyList(), pageUrl, userAgent ?: ua))
-                    }
-                    webViewClient = object : WebViewClient() {
-                        override fun onPageFinished(view: WebView, url: String?) {
-                            view.evaluateJavascript(HOOK_JS, null)
-                            CookieManager.getInstance().flush()
-                            readPage(view)
-                            view.postDelayed({ if (phase !is Phase.Ready) readPage(view) }, 2500)
-                            // Never pop the page up by itself (that was the flash); offer a button instead.
-                            view.postDelayed({ if (phase is Phase.NeedsCheck || phase is Phase.Loading) checkWaiting = true }, 7000)
-                        }
-                        override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                            val host = request.url.host.orEmpty()
-                            val ours = host.endsWith("vimm.net") || host.endsWith("cloudflare.com")
-                            if (!ours && request.isForMainFrame) { openOnSite(context, request.url.toString()); return true }
-                            return false
-                        }
-                    }
-                    loadUrl(pageUrl)
-                    web = this
-                }
-            },
-            update = { w ->
-                // While hidden, the page must not take the D-pad; otherwise you'd be steering an invisible page.
-                w.isFocusable = showPage
-                w.isFocusableInTouchMode = showPage
-                w.descendantFocusability = if (showPage) android.view.ViewGroup.FOCUS_AFTER_DESCENDANTS
-                    else android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS
-                if (!showPage) w.clearFocus()
-            },
-        )
+    // The real page lives in WebHost, behind this screen. Hook this game page up to it.
+    val onRequest by rememberUpdatedState<(DownloadRequest) -> Unit>({ request(it) })
+    val onRead by rememberUpdatedState<(WebView) -> Unit>({ readPage(it) })
+    val listener = remember(pageUrl) {
+        object : WebHost.Listener {
+            override fun onPageFinished(view: WebView) {
+                view.evaluateJavascript(HOOK_JS, null)
+                onRead(view)
+                view.postDelayed({ if (WebHost.view === view && phase !is Phase.Ready) onRead(view) }, 2500)
+                // Never pop the page up by itself (that was the flash); offer a button instead.
+                view.postDelayed({ if (phase is Phase.NeedsCheck || phase is Phase.Loading) checkWaiting = true }, 7000)
+            }
+            override fun onFormDownload(url: String, method: String, fieldsJson: String) {
+                val a = org.json.JSONArray(fieldsJson)
+                val fields = (0 until a.length()).map { a.getJSONArray(it).let { p -> p.getString(0) to p.getString(1) } }
+                onRequest(DownloadRequest(url, method, fields, pageUrl, WebHost.userAgent))
+            }
+            override fun onFileDownload(url: String, userAgent: String?) {
+                onRequest(DownloadRequest(url, "GET", emptyList(), pageUrl, userAgent ?: WebHost.userAgent))
+            }
+            override fun onExternalLink(url: String) = openOnSite(context, url)
+        }
+    }
+    DisposableEffect(listener) {
+        WebHost.open(pageUrl, listener)
+        onDispose { WebHost.release(listener) }
+    }
+    SideEffect { WebHost.showing = showPage }
 
+    // Transparent while the real page is showing, so it can be seen behind this screen.
+    Box(Modifier.fillMaxSize().background(if (showPage) Color.Transparent else Bg)) {
         AnimatedVisibility(visible = !showPage, enter = fadeIn(tween(250)), exit = fadeOut(tween(250))) {
             Box(Modifier.fillMaxSize().background(Bg)) {
                 GameDetails(
@@ -309,7 +282,6 @@ fun GameScreen(id: Int, title: String, system: String?, onBack: () -> Unit, onSh
         )
     }
 
-    DisposableEffect(Unit) { onDispose { web?.destroy() } }
 }
 
 @Composable

@@ -108,7 +108,7 @@ fun LibraryScreen(onOpen: (LibraryGame) -> Unit) {
                 )
             }
             if (Playtime.records.isNotEmpty()) {
-                FilledTonalButton(onClick = { stats = true }, modifier = Modifier.focusRing(RoundedCornerShape(50))) { Text("📊  Stats") }
+                ToolButton("Stats", { stats = true }, icon = StatsIcon)
                 Spacer(Modifier.width(6.dp))
             }
             if (Library.scanning) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)

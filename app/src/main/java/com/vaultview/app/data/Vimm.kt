@@ -43,6 +43,7 @@ object Vimm {
     private val missingImageHashes = setOf(
         "1d9f7728035c43225ddb91608ef94a36", "ebe5cdf2dc42fbe37e567c41b37ec9ea", // 250x100 banner
         "ef12b5554b8c6e77d3ed8ad91fe1a53b", "cadbbfff1f3f45455fa5e9637e48c63b", // 256x187 box
+        "ee3be2b3765df149153787c484f117f2", "37c8ccc761ed2154720d31fc91bae7a1", // 244x340 box
     )
     private val idRe = Regex("""/vault/(\d+)$""")
 
@@ -70,8 +71,10 @@ object Vimm {
                 // Recognise those exact files and report a 404 so the UI can fall back.
                 val res = chain.proceed(chain.request())
                 if (res.isSuccessful && chain.request().url.encodedPath.endsWith("image.php")) {
+                    // Real box art and screenshots are always tens of KB; every "not found" picture vimm
+                    // uses (there are several, in PNG and JPEG) is under 2 KB. Size catches new ones too.
                     val head = res.peekBody(4096).byteString()
-                    if (head.size < 4096 && head.md5().hex() in missingImageHashes) {
+                    if (head.size < 2048 || head.md5().hex() in missingImageHashes) {
                         res.close()
                         return@addInterceptor res.newBuilder().code(404).message("No image")
                             .body("".toResponseBody(null)).build()
@@ -108,7 +111,10 @@ object Vimm {
         }.distinct().take(4)
         fun clean(s: String) = s.replace(Regex("[&*/:`<>?\\\\|\"]"), "_")
         fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8").replace("+", "%20")
-        return tags.map { "https://thumbnails.libretro.com/${enc(folder)}/Named_Boxarts/${enc(clean("$name ($it)"))}.png" }
+        fun url(n: String, tag: String) = "https://thumbnails.libretro.com/${enc(folder)}/Named_Boxarts/${enc(clean("$n ($tag)"))}.png"
+        // Vimm adds notes like "(Online Enabled)" or "(Greatest Hits)"; No-Intro names usually don't have them.
+        val base = name.replace(Regex("\\s*\\([^)]*\\)\\s*$"), "").trim()
+        return tags.map { url(name, it) } + (if (base != name && base.isNotEmpty()) tags.take(2).map { url(base, it) } else emptyList())
     }
 
     /** Top-rated games shown on a system's landing page. */
