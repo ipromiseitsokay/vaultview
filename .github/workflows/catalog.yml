@@ -1,0 +1,33 @@
+name: Game catalog
+
+# Once a week, collect every game's name, region, version and rating from vimm.net (slowly, one
+# page at a time) into catalog.json.gz, published on the "catalog" release. The app bundles it at
+# build time and checks for a newer one, so browsing and search work instantly and offline.
+on:
+  schedule:
+    - cron: "17 6 * * 1"   # Mondays, 06:17 UTC
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: catalog
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 180
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build catalog
+        run: python3 scripts/build_catalog.py catalog.json.gz
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if ! gh release view catalog >/dev/null 2>&1; then
+            gh release create catalog --title "Game catalog" --notes "Updated weekly by the Game catalog workflow." --latest=false
+          fi
+          gh release upload catalog catalog.json.gz --clobber
