@@ -7,7 +7,12 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.runtime.*
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -15,6 +20,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.vaultview.app.Sfx
+import com.vaultview.app.data.Emulators
+import com.vaultview.app.data.Library
+import com.vaultview.app.data.RetroAchievements
 import com.vaultview.app.data.Settings
 import com.vaultview.app.data.Updater
 import kotlinx.coroutines.launch
@@ -49,6 +57,33 @@ fun SettingsScreen() {
                 Settings.updateSystemFolders(it)
             }
         }
+
+        Section("Emulators") {
+            val systems = Library.games.mapNotNull { it.system }.distinct().sortedWith(compareBy({ it.brand.ordinal }, { it.year }))
+            var picking by remember { mutableStateOf<com.vaultview.app.data.GameSystem?>(null) }
+            val v = Emulators.version
+            if (systems.isEmpty()) {
+                Text("Once your Library has games, pick which emulator plays each system here.", color = Muted,
+                    style = MaterialTheme.typography.bodySmall)
+            }
+            systems.forEach { sys ->
+                val choice = remember(sys.code, v) { Emulators.effectiveChoice(context, sys.code) }
+                Row(
+                    Modifier.fillMaxWidth().focusRing(RoundedCornerShape(12.dp), 1.01f)
+                        .clip(RoundedCornerShape(12.dp)).clickable { picking = sys }.padding(horizontal = 6.dp, vertical = 10.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(Modifier.size(10.dp).clip(CircleShape).background(sys.brand.color))
+                    Spacer(Modifier.width(12.dp))
+                    Text(sys.name, fontWeight = FontWeight.SemiBold, modifier = Modifier.weight(1f))
+                    Text(Emulators.label(choice, sys.code), color = if (choice == null) Color(0xFFFF8A8A) else Muted,
+                        style = MaterialTheme.typography.bodySmall)
+                }
+            }
+            picking?.let { EmulatorPicker(it, onDismiss = { picking = null }) }
+        }
+
+        Section("RetroAchievements") { RetroAchievementsSettings() }
 
         Section("Sounds") {
             Text("Menu sounds", fontWeight = FontWeight.SemiBold)
@@ -125,5 +160,56 @@ private fun Toggle(title: String, subtitle: String, checked: Boolean, onChange: 
             Text(subtitle, color = Muted, style = MaterialTheme.typography.bodySmall)
         }
         Switch(checked = checked, onCheckedChange = onChange)
+    }
+}
+
+@Composable
+private fun RetroAchievementsSettings() {
+    val scope = rememberCoroutineScope()
+    var user by remember { mutableStateOf("") }
+    var key by remember { mutableStateOf("") }
+    var busy by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(RetroAchievements.connected) { if (RetroAchievements.connected) RetroAchievements.refreshProfile() }
+
+    if (RetroAchievements.connected) {
+        val p = RetroAchievements.profile
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            coil.compose.AsyncImage(
+                model = p?.avatar, contentDescription = null,
+                modifier = Modifier.size(56.dp).clip(CircleShape).background(PanelHi),
+            )
+            Spacer(Modifier.width(14.dp))
+            Column(Modifier.weight(1f)) {
+                Text(RetroAchievements.user ?: "", fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
+                Text(p?.let { "${it.points} points" + if (it.softcorePoints > 0) " · ${it.softcorePoints} softcore" else "" } ?: "Loading…",
+                    color = VimmTitle, style = MaterialTheme.typography.bodySmall)
+                p?.motto?.let { Text("“$it”", color = Muted, style = MaterialTheme.typography.labelSmall) }
+            }
+            OutlinedButton(onClick = { RetroAchievements.disconnect() }, modifier = Modifier.focusRing(RoundedCornerShape(50))) { Text("Disconnect") }
+        }
+        Text("Your progress shows on each game in your Library. Log in to RetroAchievements inside your emulator too (RetroArch, DuckStation, PPSSPP, Dolphin…) to earn them.",
+            color = Muted, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 10.dp))
+    } else {
+        Text("See your achievement progress for each game. Your Web API key is on retroachievements.org under Settings → Keys.",
+            color = Muted, style = MaterialTheme.typography.bodySmall)
+        Spacer(Modifier.height(10.dp))
+        TapField(user, { user = it }, "Username", modifier = Modifier.widthIn(max = 420.dp))
+        Spacer(Modifier.height(8.dp))
+        TapField(key, { key = it }, "Web API key", secret = true, modifier = Modifier.widthIn(max = 420.dp))
+        error?.let { Text(it, color = Color(0xFFFF8A8A), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp)) }
+        Spacer(Modifier.height(10.dp))
+        Button(
+            enabled = !busy && user.isNotBlank() && key.isNotBlank(),
+            onClick = {
+                busy = true; error = null
+                scope.launch {
+                    try { RetroAchievements.connect(user, key); key = "" }
+                    catch (e: Exception) { error = e.message ?: "Couldn't connect" }
+                    finally { busy = false }
+                }
+            },
+            modifier = Modifier.focusRing(RoundedCornerShape(50)),
+        ) { Text(if (busy) "Checking…" else "Connect") }
     }
 }

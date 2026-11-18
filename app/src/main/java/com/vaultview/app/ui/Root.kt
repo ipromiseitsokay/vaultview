@@ -76,7 +76,12 @@ fun VaultRoot() {
     val config = LocalConfiguration.current
     val wide = config.screenWidthDp > config.screenHeightDp
 
+    val appContext = LocalContext.current
     LaunchedEffect(Unit) { Updater.check(quiet = true) }
+    // Read the ROMs folder early so Continue playing and the Library are ready.
+    LaunchedEffect(com.vaultview.app.data.Settings.folderUri) {
+        if (com.vaultview.app.data.Library.needsRescan()) com.vaultview.app.data.Library.scan(appContext)
+    }
 
     val activeDownloads = Downloads.items.count { it.active }
     fun isActive(t: Tab) = route?.substringBefore('/')?.substringBefore('?') == t.route ||
@@ -182,6 +187,7 @@ private fun Host(nav: NavHostController, onGame: (Game) -> Unit, onOwned: (com.v
             HomeScreen(
                 onSystem = { Sfx.tap(Sfx.Cue.SELECT); nav.navigate("system/$it") }, onGame = onGame,
                 onSearch = { Sfx.tap(Sfx.Cue.SELECT); nav.navigate("search") },
+                onOwned = { Sfx.tap(Sfx.Cue.SELECT); onOwned(it) },
             )
         }
         composable("system/{code}") { e ->

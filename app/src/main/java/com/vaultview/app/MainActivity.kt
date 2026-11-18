@@ -176,4 +176,10 @@ class MainActivity : ComponentActivity() {
     private fun markMoved(code: Int) { lastMove[dirIndex(code)] = SystemClock.uptimeMillis() }
 
     override fun onPause() { stopRepeat(); held = 0; super.onPause() }
+
+    override fun onResume() {
+        super.onResume()
+        // Back from an emulator: count the time played.
+        com.vaultview.app.data.Playtime.finish()
+    }
 }

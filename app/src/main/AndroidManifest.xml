@@ -13,6 +13,42 @@
     <uses-feature android:name="android.hardware.gamepad" android:required="false" />
 
     <queries>
+        <!-- Emulators VaultView can launch games in -->
+        <package android:name="com.retroarch" />
+        <package android:name="com.retroarch.aarch64" />
+        <package android:name="com.retroarch.ra32" />
+        <package android:name="aenu.aps3e" />
+        <package android:name="aenu.aps3e.premium" />
+        <package android:name="aenu.ax360e" />
+        <package android:name="aenu.ax360e.free" />
+        <package android:name="com.armsx2" />
+        <package android:name="com.armsx2.nightly" />
+        <package android:name="com.dsemu.drastic" />
+        <package android:name="com.fastemulator.gba" />
+        <package android:name="com.flycast.emulator" />
+        <package android:name="com.github.stenzek.duckstation" />
+        <package android:name="come.nanodata.armsx2" />
+        <package android:name="info.cemu.Cemu" />
+        <package android:name="info.cemu.cemu" />
+        <package android:name="io.github.lime3ds.android" />
+        <package android:name="io.recompiled.redream" />
+        <package android:name="it.dbtecno.pizzaboygba" />
+        <package android:name="it.dbtecno.pizzaboygbapro" />
+        <package android:name="me.magnum.melonds" />
+        <package android:name="me.magnum.melondualds" />
+        <package android:name="org.azahar_emu.azahar" />
+        <package android:name="org.citra.citra_emu" />
+        <package android:name="org.dolphinemu.dolphinemu" />
+        <package android:name="org.mupen64plusae.v3.fzurita" />
+        <package android:name="org.mupen64plusae.v3.fzurita.amazon" />
+        <package android:name="org.mupen64plusae.v3.fzurita.pro" />
+        <package android:name="org.ppsspp.ppsspp" />
+        <package android:name="org.ppsspp.ppssppgold" />
+        <package android:name="xyz.aethersx2.android" />
+        <intent>
+            <action android:name="android.intent.action.VIEW" />
+            <data android:mimeType="*/*" />
+        </intent>
         <intent>
             <action android:name="android.support.customtabs.action.CustomTabsService" />
         </intent>

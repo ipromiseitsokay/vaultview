@@ -7,6 +7,10 @@ An unofficial Android front end for [Vimm's Lair](https://vimm.net/vault), built
 - Game pages show details and a **Download** button; the site's own page loads in the background for its human check
 - Downloads go to a folder you pick, sorted into ES-DE style folders (`snes`, `psx`, `gba`…), and `.zip`/`.7z` files are unpacked automatically
 - Saved games, a download list, and a "Recently downloaded" shelf
+- Library of everything in your ROMs folder, grouped by system or maker, with **Play**: pick an emulator per system (RetroArch with a core, DuckStation, NetherSX2, PPSSPP, Dolphin, Azahar, melonDS, DraStic, Flycast, M64Plus FZ and more), playtime tracking and a Continue playing shelf
+- RetroAchievements progress per game (read-only, with your username and Web API key)
+
+Emulator package names and launch formats follow [ES-DE](https://es-de.org)'s Android launch rules.
 
 Menu sounds are from *UI Utility Pack Vol 1* (itch.io), sets 11 and 20, trimmed and level-matched.
 

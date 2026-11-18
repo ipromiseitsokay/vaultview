@@ -17,6 +17,9 @@ class VaultApplication : Application(), ImageLoaderFactory {
         Settings.init(this)
         Downloads.init(this)
         Sfx.init(this)
+        com.vaultview.app.data.Emulators.init(this)
+        com.vaultview.app.data.Playtime.init(this)
+        com.vaultview.app.data.RetroAchievements.init(this)
     }
 
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)

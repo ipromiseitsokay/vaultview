@@ -42,9 +42,12 @@ import com.vaultview.app.data.Systems
 import com.vaultview.app.data.Vimm
 
 @Composable
-fun HomeScreen(onSystem: (String) -> Unit, onGame: (Game) -> Unit, onSearch: () -> Unit) {
+fun HomeScreen(onSystem: (String) -> Unit, onGame: (Game) -> Unit, onSearch: () -> Unit, onOwned: (com.vaultview.app.data.LibraryGame) -> Unit = {}) {
     val wide = LocalWide.current
     val library = com.vaultview.app.data.Downloads.library().take(20)
+    val playing = com.vaultview.app.data.Library.games
+        .mapNotNull { g -> com.vaultview.app.data.Playtime.of(g)?.let { g to it } }
+        .sortedByDescending { it.second.lastPlayed }.take(12).map { it.first }
     var brandName by rememberSaveable { mutableStateOf<String?>(null) }
     val brand = brandName?.let { Brand.valueOf(it) }
     val shown = Systems.all.filter { brand == null || it.brand == brand }
@@ -94,6 +97,20 @@ fun HomeScreen(onSystem: (String) -> Unit, onGame: (Game) -> Unit, onSearch: () 
                     Icon(Icons.Filled.Search, null)
                     Spacer(Modifier.width(8.dp))
                     Text("Search", fontWeight = FontWeight.Bold)
+                }
+            }
+        }
+        if (playing.isNotEmpty()) {
+            item(span = full) { SectionLabel("Continue playing") }
+            item(span = full) {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp),
+                    modifier = Modifier.bleed(10.dp),
+                ) {
+                    items(playing, key = { "p-" + it.key }) { g ->
+                        ContinueCard(g) { onOwned(g) }
+                    }
                 }
             }
         }
@@ -224,6 +241,30 @@ private fun SystemCard(sys: GameSystem, onClick: () -> Unit) {
         Column(Modifier.align(Alignment.BottomStart).padding(12.dp)) {
             Text(sys.name, color = Color.White, fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleMedium)
             Text("${sys.year} · ${sys.brand.label}", color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.labelSmall)
+        }
+    }
+}
+
+/** A wide card for a game you've been playing: box art, title, time played. */
+@Composable
+private fun ContinueCard(g: com.vaultview.app.data.LibraryGame, onClick: () -> Unit) {
+    val shape = RoundedCornerShape(16.dp)
+    val rec = com.vaultview.app.data.Playtime.of(g)
+    Row(
+        Modifier.width(300.dp).height(120.dp).focusRing(shape, 1.04f).clip(shape)
+            .background(Brush.horizontalGradient(listOf((g.system?.brand?.color ?: Accent).copy(alpha = 0.35f), Panel)))
+            .clickable(onClick = onClick).padding(10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+    ) {
+        CoverArt(g.gameId, g.title, Modifier.fillMaxHeight().aspectRatio(0.75f).clip(RoundedCornerShape(10.dp)),
+            system = g.system?.code, regions = g.regions, exactName = g.baseName)
+        Spacer(Modifier.width(12.dp))
+        Column(Modifier.weight(1f)) {
+            Text(g.title, fontWeight = FontWeight.Bold, maxLines = 2, color = Color.White,
+                overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis)
+            Text(g.system?.name ?: "", color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.labelSmall)
+            Spacer(Modifier.height(6.dp))
+            rec?.let { Text("▶ " + com.vaultview.app.data.Playtime.format(it.seconds), color = VimmTitle, style = MaterialTheme.typography.labelMedium) }
         }
     }
 }
