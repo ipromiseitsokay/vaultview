@@ -1,6 +1,6 @@
 <resources>
     <color name="bg">#0E1015</color>
-    <color name="icon_bg">#1B2140</color>
+    <color name="icon_bg">#000035</color>
     <style name="Theme.VaultView" parent="android:Theme.Material.NoActionBar">
         <item name="android:windowBackground">@color/bg</item>
         <item name="android:statusBarColor">@android:color/transparent</item>

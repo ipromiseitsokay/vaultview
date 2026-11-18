@@ -15,12 +15,16 @@ object Settings {
     var folderUri by mutableStateOf<String?>(null); private set
     var autoExtract by mutableStateOf(true); private set
     var systemFolders by mutableStateOf(true); private set
+    var soundTheme by mutableStateOf("crisp"); private set
+    var soundVolume by mutableStateOf(0.6f); private set
 
     fun init(context: Context) {
         prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
         folderUri = prefs.getString("folder", null)
         autoExtract = prefs.getBoolean("autoExtract", true)
         systemFolders = prefs.getBoolean("systemFolders", true)
+        soundTheme = prefs.getString("soundTheme", "crisp") ?: "crisp"
+        soundVolume = prefs.getFloat("soundVolume", 0.6f)
     }
 
     fun setFolder(context: Context, uri: Uri) {
@@ -31,6 +35,8 @@ object Settings {
     }
 
     fun updateAutoExtract(v: Boolean) { autoExtract = v; prefs.edit().putBoolean("autoExtract", v).apply() }
+    fun updateSoundTheme(v: String) { soundTheme = v; prefs.edit().putString("soundTheme", v).apply() }
+    fun updateSoundVolume(v: Float) { soundVolume = v; prefs.edit().putFloat("soundVolume", v).apply() }
     fun updateSystemFolders(v: Boolean) { systemFolders = v; prefs.edit().putBoolean("systemFolders", v).apply() }
 
     /** Human-readable folder, e.g. "Internal storage/ROMs" or "SD card/ROMs". */

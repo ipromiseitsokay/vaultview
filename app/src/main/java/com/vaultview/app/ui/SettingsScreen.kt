@@ -14,6 +14,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.vaultview.app.Sfx
 import com.vaultview.app.data.Settings
 import com.vaultview.app.data.Updater
 import kotlinx.coroutines.launch
@@ -46,6 +47,37 @@ fun SettingsScreen() {
             Spacer(Modifier.height(8.dp))
             Toggle("Sort into system folders", "snes, psx, gba… the folder names ES-DE and RetroArch expect", Settings.systemFolders) {
                 Settings.updateSystemFolders(it)
+            }
+        }
+
+        Section("Sounds") {
+            Text("Menu sounds", fontWeight = FontWeight.SemiBold)
+            Text("Quiet clicks for moving, selecting and going back, plus a chime when a download finishes",
+                color = Muted, style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(10.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Sfx.themes.forEach { (key, label) ->
+                    FilterChip(
+                        selected = Settings.soundTheme == key,
+                        onClick = {
+                            Settings.updateSoundTheme(key)
+                            Sfx.play(Sfx.Cue.SUCCESS, key) // preview
+                        },
+                        label = { Text(label, fontWeight = FontWeight.Bold) },
+                        modifier = Modifier.focusRing(RoundedCornerShape(8.dp), 1.04f),
+                    )
+                }
+            }
+            if (Settings.soundTheme != "off") {
+                Spacer(Modifier.height(12.dp))
+                Text("Volume", fontWeight = FontWeight.SemiBold)
+                Slider(
+                    value = Settings.soundVolume,
+                    onValueChange = { Settings.updateSoundVolume(it) },
+                    onValueChangeFinished = { Sfx.play(Sfx.Cue.SELECT) },
+                    valueRange = 0.1f..1f,
+                    modifier = Modifier.widthIn(max = 420.dp),
+                )
             }
         }
 

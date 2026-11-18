@@ -12,6 +12,14 @@ val Muted = Color(0xFF8E95A8)
 val Accent = Color(0xFF7C93FF)
 val Gold = Color(0xFFFFC94D)
 
+// vimm.net's own palette (from its stylesheet)
+val VimmMaroon = Color(0xFF800000)
+val VimmMaroonDeep = Color(0xFF4A0000)
+val VimmNavy = Color(0xFF000035)
+val VimmRed = Color(0xFFFF0000)
+val VimmSilver = Color(0xFFC0C0C0)
+val VimmTitle = Color(0xFFFFFF99)
+
 private val scheme = darkColorScheme(
     primary = Accent,
     onPrimary = Color(0xFF0B1030),

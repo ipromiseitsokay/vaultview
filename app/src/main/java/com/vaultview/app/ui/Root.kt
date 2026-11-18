@@ -12,7 +12,18 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import com.vaultview.app.R
+import com.vaultview.app.Sfx
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -60,7 +71,7 @@ fun VaultRoot() {
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
     var selected by remember { mutableStateOf<Game?>(null) }
-    val onGame: (Game) -> Unit = { selected = it }
+    val onGame: (Game) -> Unit = { Sfx.tap(Sfx.Cue.SELECT); selected = it }
     val config = LocalConfiguration.current
     val wide = config.screenWidthDp > config.screenHeightDp
 
@@ -79,15 +90,21 @@ fun VaultRoot() {
         if (wide) {
             Surface(color = Bg, contentColor = MaterialTheme.colorScheme.onBackground) {
             Row(Modifier.fillMaxSize().systemBarsPadding()) {
-                NavigationRail(containerColor = Panel, modifier = Modifier.fillMaxHeight()) {
-                    Spacer(Modifier.height(8.dp))
+                NavigationRail(
+                    containerColor = Color.Transparent,
+                    modifier = Modifier.fillMaxHeight()
+                        .background(Brush.verticalGradient(listOf(VimmMaroon, VimmMaroonDeep)))
+                        .drawBehind { drawRect(VimmRed.copy(alpha = 0.6f), topLeft = Offset(size.width - 2.dp.toPx(), 0f), size = Size(2.dp.toPx(), size.height)) },
+                ) {
+                    Spacer(Modifier.height(6.dp))
                     Logo()
-                    Spacer(Modifier.weight(1f))
+                    Spacer(Modifier.weight(1f).heightIn(min = 6.dp))
                     tabs.forEach { t ->
                         NavigationRailItem(
-                            selected = isActive(t), onClick = { go(t) },
+                            selected = isActive(t), onClick = { Sfx.tap(Sfx.Cue.SELECT); go(t) },
                             icon = { TabIcon(t, activeDownloads) },
-                            label = { Text(t.label, maxLines = 1) },
+                            label = { Text(t.label, maxLines = 1, fontWeight = FontWeight.Bold) },
+                            colors = vimmRailColors(),
                         )
                     }
                     Spacer(Modifier.weight(1f))
@@ -102,10 +119,14 @@ fun VaultRoot() {
             Scaffold(
                 containerColor = Bg,
                 bottomBar = {
-                    NavigationBar(containerColor = Panel) {
+                    NavigationBar(
+                        containerColor = Color.Transparent,
+                        modifier = Modifier.background(Brush.verticalGradient(listOf(VimmMaroon, VimmMaroonDeep))),
+                    ) {
                         tabs.forEach { t ->
                             NavigationBarItem(
-                                selected = isActive(t), onClick = { go(t) },
+                                colors = vimmBarColors(),
+                                selected = isActive(t), onClick = { Sfx.tap(Sfx.Cue.SELECT); go(t) },
                                 icon = { TabIcon(t, activeDownloads) },
                                 label = { Text(t.label, maxLines = 1, style = MaterialTheme.typography.labelSmall) },
                             )
@@ -121,7 +142,7 @@ fun VaultRoot() {
         }
 
         selected?.let { g ->
-            GameSheet(g, onDismiss = { selected = null }, onGet = { selected = null; nav.navigate(gameRoute(g)) })
+            GameSheet(g, onDismiss = { selected = null }, onGet = { Sfx.tap(Sfx.Cue.SELECT); selected = null; nav.navigate(gameRoute(g)) })
         }
     }
 }
@@ -150,7 +171,7 @@ private fun Host(nav: NavHostController, onGame: (Game) -> Unit, modifier: Modif
             else fadeOut(tween(160))
         },
     ) {
-        composable("home") { HomeScreen(onSystem = { nav.navigate("system/$it") }, onGame = onGame) }
+        composable("home") { HomeScreen(onSystem = { Sfx.tap(Sfx.Cue.SELECT); nav.navigate("system/$it") }, onGame = onGame) }
         composable("system/{code}") { e ->
             SystemScreen(e.arguments?.getString("code").orEmpty(), onBack = { nav.popBackStack() }, onGame = onGame)
         }
@@ -181,11 +202,27 @@ private fun TabIcon(t: Tab, activeDownloads: Int) {
 
 @Composable
 private fun Logo() {
-    Box(
-        Modifier.size(44.dp).clip(RoundedCornerShape(12.dp)).background(Accent),
-        contentAlignment = Alignment.Center,
-    ) { Text("V", fontWeight = FontWeight.Black, color = Bg, style = MaterialTheme.typography.titleLarge) }
+    Image(
+        painter = painterResource(R.drawable.vimm_logo),
+        contentDescription = "Vimm's Lair",
+        modifier = Modifier.size(44.dp).shadow(10.dp, CircleShape, ambientColor = VimmRed, spotColor = VimmRed),
+    )
 }
+
+/** Navy pill with a white edge for the selected tab, like the site's rounded panels; silver text otherwise. */
+@Composable
+private fun vimmRailColors() = NavigationRailItemDefaults.colors(
+    selectedIconColor = Color.White, selectedTextColor = VimmTitle,
+    unselectedIconColor = VimmSilver, unselectedTextColor = VimmSilver,
+    indicatorColor = VimmNavy,
+)
+
+@Composable
+private fun vimmBarColors() = NavigationBarItemDefaults.colors(
+    selectedIconColor = Color.White, selectedTextColor = VimmTitle,
+    unselectedIconColor = VimmSilver, unselectedTextColor = VimmSilver,
+    indicatorColor = VimmNavy,
+)
 
 @Composable
 private fun UpdateBanner() {
@@ -199,7 +236,9 @@ private fun UpdateBannerContent() {
     val rel = Updater.available ?: return
     val ctx = LocalContext.current
     val scope = rememberCoroutineScope()
-    Surface(color = Color2, modifier = Modifier.fillMaxWidth()) {
+    Surface(color = VimmNavy, modifier = Modifier.fillMaxWidth().drawBehind {
+        drawRect(VimmRed.copy(alpha = 0.7f), topLeft = Offset(0f, size.height - 2.dp.toPx()), size = Size(size.width, 2.dp.toPx()))
+    }) {
         Row(Modifier.padding(horizontal = 16.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Text("Update ready: ${rel.name}", modifier = Modifier.weight(1f), fontWeight = FontWeight.SemiBold)
             if (Updater.busy) Text("${(Updater.progress * 100).toInt()}%", color = Muted)
@@ -208,5 +247,4 @@ private fun UpdateBannerContent() {
     }
 }
 
-private val Color2 = androidx.compose.ui.graphics.Color(0xFF26305C)
 

@@ -8,6 +8,8 @@ An unofficial Android front end for [Vimm's Lair](https://vimm.net/vault), built
 - Downloads go to a folder you pick, sorted into ES-DE style folders (`snes`, `psx`, `gba`…), and `.zip`/`.7z` files are unpacked automatically
 - Saved games, a download list, and a "Recently downloaded" shelf
 
+Menu sounds are from *UI Utility Pack Vol 1* (itch.io), sets 11 and 20, trimmed and level-matched.
+
 Everything (lists, images, game pages and files) comes from vimm.net. This app only presents it differently.
 
 ## Installing

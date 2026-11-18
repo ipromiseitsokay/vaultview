@@ -173,6 +173,7 @@ class DownloadService : Service() {
                     item.state = DownloadState.DONE
                     item.progress = 1f
                     item.finishedAt = System.currentTimeMillis()
+                    com.vaultview.app.Sfx.play(com.vaultview.app.Sfx.Cue.SUCCESS)
                     item.savedTo = listOfNotNull(Settings.folderLabel(), if (dir !== root) item.system?.folder else null).joinToString("/")
                     Downloads.persist()
                 }
@@ -182,7 +183,10 @@ class DownloadService : Service() {
             set { item.state = DownloadState.CANCELLED; item.message = null }
         } catch (e: Exception) {
             partial?.delete()
-            set { item.state = DownloadState.FAILED; item.message = e.message ?: e.javaClass.simpleName }
+            set {
+                item.state = DownloadState.FAILED; item.message = e.message ?: e.javaClass.simpleName
+                com.vaultview.app.Sfx.play(com.vaultview.app.Sfx.Cue.ERROR)
+            }
         } finally {
             temp?.delete()
         }

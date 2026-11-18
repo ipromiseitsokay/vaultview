@@ -16,6 +16,7 @@ class VaultApplication : Application(), ImageLoaderFactory {
         Favorites.init(this)
         Settings.init(this)
         Downloads.init(this)
+        Sfx.init(this)
     }
 
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)

@@ -401,7 +401,7 @@ private fun ReadyBlock(
     val progress by animateFloatAsState(mine?.progress ?: 0f, tween(400), label = "dl")
     Box(Modifier.focusRing(shape, 1.03f).clip(shape)) {
         Button(
-            onClick = { if (busy) onShowDownloads() else onDownload(info) },
+            onClick = { if (busy) onShowDownloads() else { com.vaultview.app.Sfx.tap(com.vaultview.app.Sfx.Cue.SELECT); onDownload(info) } },
             modifier = Modifier.widthIn(min = 240.dp).height(60.dp).focusRequester(downloadFocus),
             contentPadding = PaddingValues(horizontal = 28.dp),
             shape = shape,

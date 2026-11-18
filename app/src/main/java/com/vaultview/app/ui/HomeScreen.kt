@@ -49,7 +49,7 @@ fun HomeScreen(onSystem: (String) -> Unit, onGame: (Game) -> Unit) {
     val handhelds = shown.filter { it.handheld }.sortedBy { it.year }
     val full: (androidx.compose.foundation.lazy.grid.LazyGridItemSpanScope) -> GridItemSpan = { GridItemSpan(it.maxLineSpan) }
 
-    val glow by animateColorAsState(brand?.color ?: Accent, tween(600), label = "glow")
+    val glow by animateColorAsState(brand?.color ?: VimmRed, tween(600), label = "glow")
     Box(Modifier.fillMaxSize()) {
     Box(
         Modifier.fillMaxSize().drawBehind {
@@ -117,7 +117,7 @@ private fun SectionLabel(text: String) = Text(
 @Composable
 private fun BrandPicker(selected: Brand?, wide: Boolean, onPick: (Brand?) -> Unit) {
     LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
-        item { BrandTile("All", Systems.all.size, Accent, selected == null, wide) { onPick(null) } }
+        item { BrandTile("All", Systems.all.size, VimmRed.copy(red = 0.8f), selected == null, wide) { onPick(null) } }
         items(Brand.entries) { b ->
             BrandTile(b.label, Systems.all.count { it.brand == b }, b.color, selected == b, wide) { onPick(b) }
         }
