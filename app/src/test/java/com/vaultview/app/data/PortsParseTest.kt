@@ -12,7 +12,8 @@ class PortsParseTest {
       "games":[{"title":"Super Mario 64","libraryArt":{"capsule":"https://x/c.png","hero":"https://x/h.jpg"}}],
       "launcher":{"setupFiles":[{"id":"rom","label":"Super Mario 64 ROM","accepted":[]},
                                 {"id":"opt","label":"Optional pack","required":false,"accepted":[]}]}},
-     {"slug":"diablo-devilutionx","name":"Diablo","consoles":["pc"],"games":[{"title":"Diablo"}]}]
+     {"slug":"diablo-devilutionx","name":"Diablo","consoles":["pc"],"games":[{"title":"Diablo"}],
+      "android":{"url":"https://x/d.zip","filename":"devilutionx-android.zip","sha256":"ab","apk":"devilutionx.apk"}}]
     """
 
     @Test fun parsesPorts() {
@@ -25,5 +26,10 @@ class PortsParseTest {
         assertEquals(listOf("Super Mario 64 ROM"), sm.needs) // optional files are left out
         assertEquals("N64", sm.vimmSystem)
         assertNull(ports[1].vimmSystem) // PC games aren't on the Vault
+        assertNull(sm.android)
+        assertEquals("devilutionx.apk", ports[1].android?.apk)
+        assertEquals("ghostship", Ports.parseListSlug("https://quiverlauncher.com/lists/ghostship/"))
+        assertEquals("my-list", Ports.parseListSlug("my-list"))
+        assertNull(Ports.parseListSlug("https://example.com/nope"))
     }
 }

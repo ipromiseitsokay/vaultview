@@ -46,7 +46,7 @@ import kotlinx.coroutines.launch
 fun PortsScreen(onGame: (Game) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
-    LaunchedEffect(Unit) { Ports.load(context) }
+    LaunchedEffect(Unit) { Ports.load(context); Ports.refreshInstalled(context) }
     var console by rememberSaveable { mutableStateOf<String?>(null) }
     var vaultOnly by rememberSaveable { mutableStateOf(false) }
     var open by remember { mutableStateOf<Port?>(null) }
@@ -73,6 +73,8 @@ fun PortsScreen(onGame: (Game) -> Unit) {
                                 style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(bottom = 4.dp))
                         }
                     }
+                    SyncButton()
+                    Spacer(Modifier.width(10.dp))
                     QuiverButton()
                 }
                 LazyRow(
@@ -150,9 +152,8 @@ private fun PortArt(p: Port, modifier: Modifier) {
 }
 
 @Composable
-private fun PortCard(p: Port, modifier: Modifier, onClick: () -> Unit) {
-    val context = LocalContext.current
-    val installed = remember(p.slug) { Ports.packageOf(context, p.slug) != null }
+internal fun PortCard(p: Port, modifier: Modifier, badge: Boolean = true, onClick: () -> Unit) {
+    val installed = badge && p.slug in Ports.installed
     Column(modifier.focusRing(RoundedCornerShape(12.dp)).clip(RoundedCornerShape(12.dp)).clickable(onClick = onClick).padding(bottom = 4.dp)) {
         Box {
             PortArt(p, Modifier.fillMaxWidth().aspectRatio(2f / 3f).clip(RoundedCornerShape(12.dp)))
@@ -210,7 +211,7 @@ fun LifecycleResumed(block: () -> Unit) {
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun PortSheet(p: Port, onDismiss: () -> Unit, onGame: (Game) -> Unit) {
+internal fun PortSheet(p: Port, onDismiss: () -> Unit, onGame: (Game) -> Unit) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
     val wide = LocalWide.current
@@ -313,4 +314,131 @@ private fun PortFact(label: String, value: String) {
         Text("$label  ", color = Muted, style = MaterialTheme.typography.bodySmall)
         Text(value, style = MaterialTheme.typography.bodySmall)
     }
+}
+
+
+/** Sync with Quiver Launcher: finds ports installed on this device and follows your shared Quiver list. */
+@Composable
+fun SyncButton(modifier: Modifier = Modifier) {
+    var open by remember { mutableStateOf(false) }
+    ToolButton("Sync", { open = true }, modifier = modifier, icon = SyncIcon)
+    if (open) SyncDialog { open = false }
+}
+
+@Composable
+private fun SyncDialog(onDismiss: () -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var busy by remember { mutableStateOf(true) }
+    var result by remember { mutableStateOf<String?>(null) }
+    var link by remember { mutableStateOf(Ports.listSlug(context)?.let { "quiverlauncher.com/lists/$it" } ?: "") }
+    var bad by remember { mutableStateOf(false) }
+    fun run() { busy = true; scope.launch { result = Ports.sync(context); busy = false } }
+    LaunchedEffect(Unit) { run() }
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = Panel,
+        properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
+        modifier = Modifier.widthIn(max = 640.dp).padding(horizontal = 24.dp),
+        title = { Text("Sync with Quiver Launcher", style = MaterialTheme.typography.titleLarge, fontWeight = FontWeight.Bold) },
+        text = {
+            Column(Modifier.verticalScroll(rememberScrollState())) {
+                Text("Finds ports on this handheld, installed with Quiver or here, and puts them in your Library.",
+                    style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(12.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    if (busy) { CircularProgressIndicator(Modifier.size(18.dp), strokeWidth = 2.dp); Spacer(Modifier.width(10.dp)) }
+                    Text(if (busy) "Syncing…" else result ?: "", color = if (busy) Muted else Color(0xFF7BD88F),
+                        style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
+                }
+                Spacer(Modifier.height(16.dp))
+                Text("YOUR QUIVER LIST (OPTIONAL)", color = Muted, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                Text("Share a list from Quiver and paste its link: its games show up in your Library, ready to install.",
+                    color = Muted, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 2.dp, bottom = 8.dp))
+                TapField(link, { link = it; bad = false }, "quiverlauncher.com/lists/…", modifier = Modifier.fillMaxWidth())
+                if (bad) Text("That doesn't look like a Quiver list link.", color = Color(0xFFFF8A80), style = MaterialTheme.typography.bodySmall)
+            }
+        },
+        confirmButton = {
+            Button(onClick = {
+                val slug = if (link.isBlank()) null else Ports.parseListSlug(link)
+                if (link.isNotBlank() && slug == null) { bad = true; return@Button }
+                Ports.setList(context, slug)
+                run()
+            }, enabled = !busy, shape = RoundedCornerShape(10.dp)) { Text("Sync now") }
+        },
+        dismissButton = { TextButton(onClick = onDismiss) { Text("Done") } },
+    )
+}
+
+/** Library in Ports mode: the ports on this handheld, ready to play, plus your Quiver list. */
+@Composable
+fun PortsLibraryScreen(onGame: (Game) -> Unit) {
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var open by remember { mutableStateOf<Port?>(null) }
+    LaunchedEffect(Unit) {
+        Ports.load(context)
+        Ports.refreshInstalled(context)
+        // First visit: look for ports installed with Quiver straight away.
+        if (Ports.lastSync == null) Ports.sync(context)
+    }
+    LifecycleResumed { Ports.refreshInstalled(context) }
+    val bySlug = Ports.items.associateBy { it.slug }
+    val installed = Ports.installed.keys.mapNotNull { bySlug[it] }.sortedBy { it.name.lowercase() }
+    val fromList = Ports.list?.ports?.filter { it.slug !in Ports.installed }.orEmpty()
+    val full: androidx.compose.foundation.lazy.grid.LazyGridItemSpanScope.() -> GridItemSpan = { GridItemSpan(maxLineSpan) }
+
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(if (LocalWide.current) 136.dp else 116.dp),
+        contentPadding = PaddingValues(start = 16.dp, end = 16.dp, top = 12.dp, bottom = 24.dp),
+        horizontalArrangement = Arrangement.spacedBy(14.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
+        modifier = Modifier.fillMaxSize(),
+    ) {
+        item(span = full) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Column(Modifier.weight(1f)) {
+                    Text("Library", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
+                    Text(
+                        "${installed.size} port${if (installed.size == 1) "" else "s"} on this handheld" +
+                            (Ports.list?.let { " · Quiver list “${it.name}”" } ?: ""),
+                        color = Muted, style = MaterialTheme.typography.bodySmall,
+                    )
+                }
+                SyncButton()
+                Spacer(Modifier.width(10.dp))
+                QuiverButton()
+            }
+        }
+        if (installed.isEmpty()) {
+            item(span = full) {
+                Text(
+                    if (Ports.items.isEmpty() && Ports.loading) "Loading ports…"
+                    else "No ports on this handheld yet. Install one from Ports, or press Sync to find ones you installed with Quiver.",
+                    color = Muted, textAlign = TextAlign.Center,
+                    modifier = Modifier.fillMaxWidth().padding(vertical = 40.dp),
+                )
+            }
+        } else {
+            item(span = full) { PortsSection("Ready to play") }
+            items(installed, key = { "i-" + it.slug }) { p ->
+                PortCard(p, Modifier, badge = false) {
+                    Sfx.tap(Sfx.Cue.SELECT)
+                    Ports.packageOf(context, p.slug)?.let { Ports.launch(context, it) } ?: run { open = p }
+                }
+            }
+        }
+        if (fromList.isNotEmpty()) {
+            item(span = full) { PortsSection("From your Quiver list · not installed yet") }
+            items(fromList, key = { "l-" + it.slug }) { p -> PortCard(p, Modifier) { Sfx.tap(Sfx.Cue.SELECT); open = p } }
+        }
+    }
+    open?.let { p -> PortSheet(p, onDismiss = { open = null }, onGame = { open = null; onGame(it) }) }
+}
+
+@Composable
+private fun PortsSection(label: String) {
+    Text(label.uppercase(), color = Muted, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold,
+        modifier = Modifier.padding(top = 8.dp))
 }

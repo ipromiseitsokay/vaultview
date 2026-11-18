@@ -32,10 +32,17 @@ data class Port(
     val version: String?,
     val reviews: Int,
     val needs: List<String>, // what the port asks you to provide, e.g. "Super Mario 64 ROM"
+    val android: AndroidBuild? = null, // the checked Android download, when the daily list found one
 ) {
     /** The vimm.net system the original game came out on, if the Vault has it. */
     val vimmSystem: String? get() = consoles.firstNotNullOfOrNull { Ports.consoleToVimm[it] }
 }
+
+/** An installable Android build: an .apk, or a .zip holding [apk]. */
+data class AndroidBuild(val url: String, val filename: String, val sha256: String?, val apk: String?)
+
+/** A list someone shared from Quiver Launcher (quiverlauncher.com/lists/...). */
+data class QuiverList(val slug: String, val name: String, val owner: String, val ports: List<Port>)
 
 /**
  * Ports, as listed by the public catalog behind Quiver Launcher (quiverlauncher.com). VaultView only
@@ -90,6 +97,9 @@ object Ports {
         error = null
         try {
             val all = withContext(Dispatchers.IO) {
+                // First choice: the daily list on our GitHub release, which keeps only ports whose
+                // latest release really has an Android build. Fall back to the live catalog.
+                runCatching { dailyList() }.getOrNull()?.let { return@withContext it }
                 val out = JSONArray()
                 var cursor: String? = null
                 repeat(6) { // up to 600 ports
@@ -111,6 +121,15 @@ object Ports {
             loading = false
         }
     }
+
+    private const val DAILY = "https://github.com/ipromiseitsokay/vaultview/releases/download/catalog/ports.json.gz"
+
+    private fun dailyList(): JSONArray =
+        http.newCall(Request.Builder().url(DAILY).header("User-Agent", "VaultView").build()).execute().use { r ->
+            if (!r.isSuccessful) throw IOException("HTTP ${r.code}")
+            val text = java.util.zip.GZIPInputStream(r.body!!.byteStream()).bufferedReader().readText()
+            JSONObject(text).getJSONArray("ports")
+        }
 
     private fun get(url: String): String =
         http.newCall(Request.Builder().url(url).header("User-Agent", "VaultView").build()).execute().use { r ->
@@ -141,6 +160,9 @@ object Ports {
             version = s(o, "lastReleaseVersion"),
             reviews = o.optInt("reviewCount"),
             needs = needs,
+            android = o.optJSONObject("android")?.let { a ->
+                AndroidBuild(a.getString("url"), a.getString("filename"), s(a, "sha256"), s(a, "apk"))
+            },
         )
     }
 
@@ -171,9 +193,105 @@ object Ports {
 
     private fun prefs(context: Context) = context.getSharedPreferences("ports", Context.MODE_PRIVATE)
 
-    /** The Android package a port installed as, once we've seen its APK. */
+    /** Installed ports on this device: slug to Android package. Updated by [refreshInstalled] and [sync]. */
+    var installed by mutableStateOf<Map<String, String>>(emptyMap())
+        private set
+
+    /** The Android package a port installed as, if it's on the device. */
     fun packageOf(context: Context, slug: String): String? =
-        prefs(context).getString(slug, null)?.takeIf { isInstalled(context, it) }
+        installed[slug] ?: prefs(context).getString(slug, null)?.takeIf { isInstalled(context, it) }
+
+    /** Re-checks which known ports are still installed (cheap; run on resume). */
+    fun refreshInstalled(context: Context) {
+        val all = prefs(context).all.filterKeys { !it.startsWith("_") }.mapNotNull { (k, v) -> (v as? String)?.let { k to it } }
+        installed = all.filter { isInstalled(context, it.second) }.toMap()
+    }
+
+    var list by mutableStateOf<QuiverList?>(null)
+        private set
+    var lastSync by mutableStateOf<String?>(null)
+        private set
+
+    fun listSlug(context: Context): String? = prefs(context).getString("_list", null)
+
+    /** Accepts quiverlauncher.com/lists/NAME or just NAME, like Quiver itself does. */
+    fun parseListSlug(input: String): String? =
+        Regex("^(?:(?:https?://)?(?:www\\.)?quiverlauncher\\.com/lists/)?([a-z0-9-]{1,100})/?(?:[?#].*)?$", RegexOption.IGNORE_CASE)
+            .find(input.trim())?.groupValues?.get(1)?.lowercase()
+
+    fun setList(context: Context, slug: String?) {
+        prefs(context).edit().apply { if (slug == null) remove("_list") else putString("_list", slug) }.apply()
+        if (slug == null) list = null
+    }
+
+    /**
+     * Sync with Quiver Launcher, without its website: finds every port installed on this device
+     * (whether Quiver or VaultView installed it) by matching installed apps' names to the catalog, and
+     * pulls your shared Quiver list, if you linked one.
+     */
+    suspend fun sync(context: Context): String {
+        if (items.isEmpty()) load(context)
+        val found = withContext(Dispatchers.Default) { findInstalled(context) }
+        val p = prefs(context).edit()
+        found.forEach { (slug, pkg) -> p.putString(slug, pkg) }
+        p.apply()
+        refreshInstalled(context)
+        val parts = mutableListOf("${installed.size} port${if (installed.size == 1) "" else "s"} installed")
+        listSlug(context)?.let { slug ->
+            runCatching { fetchList(slug) }
+                .onSuccess { list = it; parts += "list “${it.name}” has ${it.ports.size}" }
+                .onFailure { parts += "couldn't read your Quiver list" }
+        }
+        return parts.joinToString(" · ").also { lastSync = it }
+    }
+
+    private suspend fun fetchList(slug: String): QuiverList = withContext(Dispatchers.IO) {
+        val o = JSONObject(get("$API/lists/$slug"))
+        val arr = o.getJSONArray("items")
+        val entries = JSONArray()
+        for (i in 0 until arr.length()) arr.optJSONObject(i)?.optJSONObject("entry")?.let { entries.put(it) }
+        val known = items.associateBy { it.slug }
+        QuiverList(slug, o.optString("name"), o.optJSONObject("owner")?.optString("name") ?: "",
+            parse(entries).map { known[it.slug] ?: it })
+    }
+
+    private fun norm(s: String) = s.lowercase().replace(Regex("[^a-z0-9]"), "")
+
+    /**
+     * Matches launchable apps on the device to ports. Strongest first: the app's name is the project's
+     * name ("Ghostship"), the package contains it (com.mgrz18.sdlpop), the app's name is the game's title
+     * and only one port has that title ("Jill of the Jungle"), then a looser prefix match.
+     */
+    private fun findInstalled(context: Context): Map<String, String> {
+        val pm = context.packageManager
+        val apps = pm.queryIntentActivities(Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_LAUNCHER), 0)
+            .map { Triple(it.activityInfo.packageName, norm(it.loadLabel(pm).toString()), norm(it.activityInfo.packageName)) }
+            .filter { (pkg, label, _) -> pkg != context.packageName && pkg != QUIVER_PACKAGE && label.length >= 3 }
+            .distinctBy { it.first }
+        val titleCount = items.groupingBy { norm(it.name) }.eachCount()
+        val out = mutableMapOf<String, String>()
+        val taken = mutableSetOf<String>()
+        fun claim(port: Port, pkg: String) { if (pkg !in taken) { out[port.slug] = pkg; taken += pkg } }
+        val generic = Regex("^(android|arm64|arm|v8a|v7a|aarch64|x86|x8664|universal|release|debug|signed|unsigned|apk|app|game|port|v?\\d+)$")
+        fun fromFile(f: String?) = f?.substringBeforeLast('.')?.split('-', '_', '.', ' ')
+            ?.map(::norm)?.firstOrNull { it.isNotEmpty() && !generic.matches(it) }
+        val names = items.associateWith { port ->
+            listOfNotNull(port.project, fromFile(port.android?.filename))
+                .map(::norm).map { it.removeSuffix("android").removePrefix("android") }
+                .filter { it.length >= 4 && !generic.matches(it) }.distinct()
+        }
+        val tiers: List<(Port, Triple<String, String, String>) -> Boolean> = listOf(
+            { p, (_, label, _) -> names.getValue(p).any { it == label } },
+            { p, (_, _, pkg) -> names.getValue(p).any { it.length >= 5 && pkg.endsWith(it) } },
+            { p, (_, label, _) -> norm(p.name).let { t -> t.length >= 6 && t == label && titleCount[t] == 1 } },
+            { p, (_, label, _) -> names.getValue(p).any { n -> n.length >= 6 && (label.startsWith(n) || (label.length >= 6 && n.startsWith(label))) } },
+        )
+        for (tier in tiers) for (port in items) {
+            if (port.slug in out) continue
+            apps.firstOrNull { it.first !in taken && tier(port, it) }?.let { claim(port, it.first) }
+        }
+        return out
+    }
 
     fun isInstalled(context: Context, pkg: String) =
         runCatching { context.packageManager.getPackageInfo(pkg, 0); true }.getOrDefault(false)
@@ -193,7 +311,8 @@ object Ports {
         if (!Installer.canInstall(context)) { messages[p.slug] = "Allow VaultView to install apps, then press Install again"; return }
         progress[p.slug] = 0f
         try {
-            val asset = withContext(Dispatchers.IO) { androidAsset(p.slug) }
+            val asset = p.android?.let { Asset(it.url, it.filename, it.sha256) }
+                ?: withContext(Dispatchers.IO) { androidAsset(p.slug) }
                 ?: throw IOException("No Android download for this port yet. Try it in Quiver.")
             val dir = File(context.cacheDir, "updates").apply { mkdirs() }
             // Earlier port downloads have been handed to Android already; don't let them pile up.

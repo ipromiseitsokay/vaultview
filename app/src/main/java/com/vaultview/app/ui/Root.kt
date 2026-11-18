@@ -145,7 +145,7 @@ fun VaultRoot() {
                     Box(Modifier.weight(1f)) {
                         // The one vimm.net page, under every screen (64dp leaves the game page's top bar clear).
                         WebHost.Host(Modifier.fillMaxSize().padding(top = 64.dp))
-                        Host(nav, onGame, { owned = it }, { rolling = true }, Modifier.fillMaxSize())
+                        Host(nav, ports, onGame, { owned = it }, { rolling = true }, Modifier.fillMaxSize())
                     }
                 }
             }
@@ -174,7 +174,7 @@ fun VaultRoot() {
                     Box(Modifier.weight(1f)) {
                         // The one vimm.net page, under every screen (64dp leaves the game page's top bar clear).
                         WebHost.Host(Modifier.fillMaxSize().padding(top = 64.dp))
-                        Host(nav, onGame, { owned = it }, { rolling = true }, Modifier.fillMaxSize())
+                        Host(nav, ports, onGame, { owned = it }, { rolling = true }, Modifier.fillMaxSize())
                     }
                 }
             }
@@ -197,7 +197,7 @@ fun VaultRoot() {
 }
 
 @Composable
-private fun Host(nav: NavHostController, onGame: (Game) -> Unit, onOwned: (com.vaultview.app.data.LibraryGame) -> Unit, onRandom: () -> Unit, modifier: Modifier) {
+private fun Host(nav: NavHostController, ports: Boolean, onGame: (Game) -> Unit, onOwned: (com.vaultview.app.data.LibraryGame) -> Unit, onRandom: () -> Unit, modifier: Modifier) {
     // Tabs cross-fade; drilling into a system or game slides in from the right.
     val ease = tween<Float>(320, easing = FastOutSlowInEasing)
     fun deep(route: String?) = route?.startsWith("system/") == true || route?.startsWith("game/") == true || route == "search"
@@ -233,7 +233,10 @@ private fun Host(nav: NavHostController, onGame: (Game) -> Unit, onOwned: (com.v
         }
         composable("ports") { PortsScreen(onGame) }
         composable("search") { SearchScreen(onGame, onBack = { nav.popBackStack() }) }
-        composable("library") { LibraryScreen(onOpen = { Sfx.tap(Sfx.Cue.SELECT); onOwned(it) }) }
+        composable("library") {
+            // In Ports mode the Library is your installed ports; in the Vault it's your ROMs folder.
+            if (ports) PortsLibraryScreen(onGame) else LibraryScreen(onOpen = { Sfx.tap(Sfx.Cue.SELECT); onOwned(it) })
+        }
         composable("saved") { SavedScreen(onGame) }
         composable("downloads") { DownloadsScreen(onGame, onOwned = { Sfx.tap(Sfx.Cue.SELECT); onOwned(it) }) }
         composable("settings") { SettingsScreen() }

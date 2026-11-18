@@ -13,6 +13,11 @@
     <uses-feature android:name="android.hardware.gamepad" android:required="false" />
 
     <queries>
+        <!-- Sync with Quiver: find ports installed on the device by their launcher names. -->
+        <intent>
+            <action android:name="android.intent.action.MAIN" />
+            <category android:name="android.intent.category.LAUNCHER" />
+        </intent>
         <!-- Emulators VaultView can launch games in -->
         <package android:name="com.retroarch" />
         <package android:name="com.retroarch.aarch64" />

@@ -156,3 +156,8 @@ val PortsIcon: ImageVector by lazy {
         ).toNodes(), fill = SolidColor(Color.Black), pathFillType = androidx.compose.ui.graphics.PathFillType.EvenOdd)
         .build()
 }
+
+/** Two arrows chasing each other round: sync. */
+val SyncIcon: ImageVector by lazy {
+    lined("Sync", "M19.5,12a7.5,7.5 0 0,1 -12.8,5.3 M4.5,12a7.5,7.5 0 0,1 12.8,-5.3 M17.5,3v4h-4 M6.5,21v-4h4")
+}
