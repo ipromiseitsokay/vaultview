@@ -42,7 +42,7 @@ import com.vaultview.app.data.Systems
 import com.vaultview.app.data.Vimm
 
 @Composable
-fun HomeScreen(onSystem: (String) -> Unit, onGame: (Game) -> Unit, onSearch: () -> Unit, onOwned: (com.vaultview.app.data.LibraryGame) -> Unit = {}) {
+fun HomeScreen(onSystem: (String) -> Unit, onGame: (Game) -> Unit, onSearch: () -> Unit, onOwned: (com.vaultview.app.data.LibraryGame) -> Unit = {}, onRandom: () -> Unit = {}) {
     val wide = LocalWide.current
     val library = com.vaultview.app.data.Downloads.library().take(20)
     val playing = com.vaultview.app.data.Library.games
@@ -79,16 +79,22 @@ fun HomeScreen(onSystem: (String) -> Unit, onGame: (Game) -> Unit, onSearch: () 
                     Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.weight(1f)) {
                         Text("The Vault", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
                         Spacer(Modifier.width(12.dp))
-                        Text("Pick a maker, then a system", color = Muted, style = MaterialTheme.typography.bodyMedium,
+                        Text("Pick a manufacturer, then a system", color = Muted, style = MaterialTheme.typography.bodyMedium,
                             modifier = Modifier.padding(bottom = 4.dp))
                     }
                 } else {
                     Column(Modifier.padding(top = 8.dp, bottom = 4.dp).weight(1f)) {
                         Text("The Vault", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Black)
-                        Text("Pick a maker, then a system", color = Muted, style = MaterialTheme.typography.bodyMedium)
+                        Text("Pick a manufacturer, then a system", color = Muted, style = MaterialTheme.typography.bodyMedium)
                     }
                 }
-                // Search lives here now, top right of Browse.
+                // Surprise me and Search, top right of Browse.
+                FilledTonalButton(
+                    onClick = onRandom,
+                    modifier = Modifier.focusRing(RoundedCornerShape(50)),
+                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
+                ) { Text("🎲  Surprise me", fontWeight = FontWeight.Bold) }
+                Spacer(Modifier.width(10.dp))
                 FilledTonalButton(
                     onClick = onSearch,
                     modifier = Modifier.focusRing(RoundedCornerShape(50)),
@@ -132,13 +138,25 @@ fun HomeScreen(onSystem: (String) -> Unit, onGame: (Game) -> Unit, onSearch: () 
         item(span = full) {
             BrandPicker(brand, wide) { brandName = it?.name }
         }
-        if (consoles.isNotEmpty()) {
+        if (brand == null) {
+            var idx = 0
+            Brand.entries.forEach { b ->
+                val list = Systems.all.filter { it.brand == b }.sortedWith(compareBy({ it.handheld }, { it.year }))
+                item(span = full, key = "h-${b.name}") { BrandHeader(b, list.size) }
+                itemsIndexed(list, key = { _, s -> s.code }) { i, s ->
+                    val n = idx + i
+                    Box(Modifier.animateItem().staggerIn(n).then(if (n == 0) Modifier.initialFocus() else Modifier)) { SystemCard(s) { onSystem(s.code) } }
+                }
+                idx += list.size
+            }
+        }
+        if (brand != null && consoles.isNotEmpty()) {
             item(span = full, key = "consoles") { SectionLabel("Consoles") }
             itemsIndexed(consoles, key = { _, s -> s.code }) { i, s ->
                 Box(Modifier.animateItem().staggerIn(i).then(if (i == 0) Modifier.initialFocus() else Modifier)) { SystemCard(s) { onSystem(s.code) } }
             }
         }
-        if (handhelds.isNotEmpty()) {
+        if (brand != null && handhelds.isNotEmpty()) {
             item(span = full, key = "handhelds") { SectionLabel("Handhelds") }
             itemsIndexed(handhelds, key = { _, s -> s.code }) { i, s ->
                 Box(Modifier.animateItem().staggerIn(consoles.size + i)) { SystemCard(s) { onSystem(s.code) } }
@@ -187,7 +205,7 @@ private fun BrandTile(label: String, count: Int, color: Color, active: Boolean, 
             .padding(if (wide) 10.dp else 12.dp),
         verticalArrangement = Arrangement.SpaceBetween,
     ) {
-        Box(Modifier.size(10.dp).clip(RoundedCornerShape(50)).background(if (active) Color.White else color))
+        Emblem(label, color, active)
         Column {
             Text(label, fontWeight = FontWeight.Bold, color = Color.White, style = MaterialTheme.typography.titleSmall)
             Text("$count systems", style = MaterialTheme.typography.labelSmall,
@@ -266,5 +284,33 @@ private fun ContinueCard(g: com.vaultview.app.data.LibraryGame, onClick: () -> U
             Spacer(Modifier.height(6.dp))
             rec?.let { Text("▶ " + com.vaultview.app.data.Playtime.format(it.seconds), color = VimmTitle, style = MaterialTheme.typography.labelMedium) }
         }
+    }
+}
+
+/** Short badge for each manufacturer, in its colour. */
+private val emblems = mapOf("All" to "★", "Nintendo" to "N", "PlayStation" to "PS", "Sega" to "S", "Xbox" to "X",
+    "Atari" to "A", "NEC" to "TG", "Philips" to "CDi")
+
+@Composable
+private fun Emblem(label: String, color: Color, active: Boolean) {
+    Box(
+        Modifier.size(26.dp).clip(RoundedCornerShape(50))
+            .then(if (active) Modifier.background(Color.White) else Modifier.background(Brush.linearGradient(listOf(color, color.copy(alpha = 0.6f))))),
+        contentAlignment = Alignment.Center,
+    ) {
+        Text(emblems[label] ?: label.take(1), color = if (active) color else Color.White, fontWeight = FontWeight.Black,
+            style = MaterialTheme.typography.labelSmall)
+    }
+}
+
+/** Section title for a manufacturer on the All view. */
+@Composable
+private fun BrandHeader(b: Brand, count: Int) {
+    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(top = 14.dp, bottom = 2.dp)) {
+        Box(Modifier.width(4.dp).height(22.dp).clip(RoundedCornerShape(2.dp)).background(b.color))
+        Spacer(Modifier.width(10.dp))
+        Text(b.label, fontWeight = FontWeight.ExtraBold, style = MaterialTheme.typography.titleLarge)
+        Spacer(Modifier.width(10.dp))
+        Text("$count systems", color = Muted, style = MaterialTheme.typography.labelLarge)
     }
 }

@@ -24,8 +24,9 @@ class VaultApplication : Application(), ImageLoaderFactory {
 
     override fun newImageLoader(): ImageLoader = ImageLoader.Builder(this)
         .okHttpClient(Vimm.client)
-        .crossfade(true)
+        .crossfade(180)
         .respectCacheHeaders(false)
-        .diskCache { DiskCache.Builder().directory(cacheDir.resolve("art")).maxSizeBytes(150L * 1024 * 1024).build() }
+        .memoryCache { coil.memory.MemoryCache.Builder(this).maxSizePercent(0.30).build() }
+        .diskCache { DiskCache.Builder().directory(cacheDir.resolve("art")).maxSizeBytes(400L * 1024 * 1024).build() }
         .build()
 }

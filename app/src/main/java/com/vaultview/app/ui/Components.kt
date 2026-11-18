@@ -87,9 +87,12 @@ fun CoverArt(
             return@Box
         }
         val model = sources[stage]
-        AsyncImage(
-            model = model, contentDescription = null, contentScale = ContentScale.Crop,
-            modifier = Modifier.matchParentSize().blur(18.dp).alpha(0.55f),
+        val ctx = androidx.compose.ui.platform.LocalContext.current
+        // Backdrop: a tiny copy stretched to fill reads as a soft blur, without the cost of a real blur.
+        if (loaded) AsyncImage(
+            model = remember(model) { coil.request.ImageRequest.Builder(ctx).data(model).size(6, 8).precision(coil.size.Precision.EXACT).build() },
+            contentDescription = null, contentScale = ContentScale.Crop, filterQuality = androidx.compose.ui.graphics.FilterQuality.High,
+            modifier = Modifier.matchParentSize().alpha(0.5f),
         )
         AsyncImage(
             model = model, contentDescription = title, contentScale = ContentScale.Fit,

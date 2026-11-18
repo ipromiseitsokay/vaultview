@@ -17,6 +17,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
@@ -56,7 +57,7 @@ import kotlinx.coroutines.launch
 private data class Tab(val route: String, val label: String, val icon: ImageVector)
 
 private val tabs = listOf(
-    Tab("home", "Browse", Icons.Filled.Home),
+    Tab("home", "Browse", BrowseIcon),
     Tab("library", "Library", LibraryIcon),
     Tab("saved", "Saved", Icons.Filled.Favorite),
     Tab("downloads", "Downloads", DownloadIcon),
@@ -72,6 +73,7 @@ fun VaultRoot() {
     val route = entry?.destination?.route
     var selected by remember { mutableStateOf<Game?>(null) }
     var owned by remember { mutableStateOf<com.vaultview.app.data.LibraryGame?>(null) }
+    var rolling by remember { mutableStateOf(false) }
     val onGame: (Game) -> Unit = { Sfx.tap(Sfx.Cue.SELECT); selected = it }
     val config = LocalConfiguration.current
     val wide = config.screenWidthDp > config.screenHeightDp
@@ -108,7 +110,7 @@ fun VaultRoot() {
                     tabs.forEach { t ->
                         NavigationRailItem(
                             selected = isActive(t), onClick = { Sfx.tap(Sfx.Cue.SELECT); go(t) },
-                            icon = { TabIcon(t, activeDownloads) },
+                            icon = { TabIcon(t, activeDownloads, isActive(t)) },
                             label = { Text(t.label, maxLines = 1, fontWeight = FontWeight.Bold) },
                             colors = vimmRailColors(),
                             modifier = Modifier.focusGlow(),
@@ -118,7 +120,7 @@ fun VaultRoot() {
                 }
                 Column(Modifier.weight(1f)) {
                     UpdateBanner()
-                    Host(nav, onGame, { owned = it }, Modifier.weight(1f))
+                    Host(nav, onGame, { owned = it }, { rolling = true }, Modifier.weight(1f))
                 }
             }
             }
@@ -134,7 +136,7 @@ fun VaultRoot() {
                             NavigationBarItem(
                                 colors = vimmBarColors(),
                                 selected = isActive(t), onClick = { Sfx.tap(Sfx.Cue.SELECT); go(t) },
-                                icon = { TabIcon(t, activeDownloads) },
+                                icon = { TabIcon(t, activeDownloads, isActive(t)) },
                                 label = { Text(t.label, maxLines = 1, style = MaterialTheme.typography.labelSmall) },
                             )
                         }
@@ -143,7 +145,7 @@ fun VaultRoot() {
             ) { pad ->
                 Column(Modifier.padding(pad)) {
                     UpdateBanner()
-                    Host(nav, onGame, { owned = it }, Modifier.weight(1f))
+                    Host(nav, onGame, { owned = it }, { rolling = true }, Modifier.weight(1f))
                 }
             }
         }
@@ -151,6 +153,11 @@ fun VaultRoot() {
         selected?.let { g ->
             GameSheet(g, onDismiss = { selected = null }, onGet = { Sfx.tap(Sfx.Cue.SELECT); selected = null; nav.navigate(gameRoute(g)) })
         }
+        if (rolling) RandomSheet(
+            onDismiss = { rolling = false },
+            onGame = { selected = it },
+            onOwned = { owned = it },
+        )
         owned?.let { g ->
             LibrarySheet(g, onDismiss = { owned = null }, onVimm = { id ->
                 owned = null; nav.navigate(gameRoute(Game(id, g.title, g.system?.name)))
@@ -160,7 +167,7 @@ fun VaultRoot() {
 }
 
 @Composable
-private fun Host(nav: NavHostController, onGame: (Game) -> Unit, onOwned: (com.vaultview.app.data.LibraryGame) -> Unit, modifier: Modifier) {
+private fun Host(nav: NavHostController, onGame: (Game) -> Unit, onOwned: (com.vaultview.app.data.LibraryGame) -> Unit, onRandom: () -> Unit, modifier: Modifier) {
     // Tabs cross-fade; drilling into a system or game slides in from the right.
     val ease = tween<Float>(320, easing = FastOutSlowInEasing)
     fun deep(route: String?) = route?.startsWith("system/") == true || route?.startsWith("game/") == true || route == "search"
@@ -188,6 +195,7 @@ private fun Host(nav: NavHostController, onGame: (Game) -> Unit, onOwned: (com.v
                 onSystem = { Sfx.tap(Sfx.Cue.SELECT); nav.navigate("system/$it") }, onGame = onGame,
                 onSearch = { Sfx.tap(Sfx.Cue.SELECT); nav.navigate("search") },
                 onOwned = { Sfx.tap(Sfx.Cue.SELECT); onOwned(it) },
+                onRandom = { Sfx.tap(Sfx.Cue.SELECT); onRandom() },
             )
         }
         composable("system/{code}") { e ->
@@ -211,7 +219,18 @@ private fun Host(nav: NavHostController, onGame: (Game) -> Unit, onOwned: (com.v
 }
 
 @Composable
-private fun TabIcon(t: Tab, activeDownloads: Int) {
+private fun TabIcon(t: Tab, activeDownloads: Int, selected: Boolean = false) {
+    // The selected tab's icon pops slightly larger.
+    val scale by androidx.compose.animation.core.animateFloatAsState(
+        if (selected) 1.15f else 1f,
+        androidx.compose.animation.core.spring(dampingRatio = 0.45f, stiffness = androidx.compose.animation.core.Spring.StiffnessMediumLow),
+        label = "tab",
+    )
+    Box(Modifier.graphicsLayer { scaleX = scale; scaleY = scale }) { TabIconInner(t, activeDownloads) }
+}
+
+@Composable
+private fun TabIconInner(t: Tab, activeDownloads: Int) {
     if (t.route == "downloads" && activeDownloads > 0) {
         BadgedBox(badge = { Badge { Text("$activeDownloads") } }) { Icon(t.icon, null) }
     } else if (t.route == "settings" && Updater.available != null) {

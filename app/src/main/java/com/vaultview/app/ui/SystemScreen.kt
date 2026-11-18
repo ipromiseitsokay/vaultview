@@ -31,14 +31,17 @@ import com.vaultview.app.data.GameSystem
 import com.vaultview.app.data.Systems
 import com.vaultview.app.data.Vimm
 
-private const val TOP = "TOP"
-private val sections = listOf(TOP, "#") + ('A'..'Z').map { it.toString() }
+private const val ALL = "ALL"
+private val sections = listOf(ALL, "#") + ('A'..'Z').map { it.toString() }
 
 @Composable
 fun SystemScreen(code: String, onBack: () -> Unit, onGame: (Game) -> Unit) {
     val sys = Systems.byCode(code) ?: return CenterMessage("Unknown system")
     val wide = LocalWide.current
-    var section by rememberSaveable { mutableStateOf(TOP) }
+    var section by rememberSaveable { mutableStateOf(ALL) }
+    var byRating by rememberSaveable { mutableStateOf(true) }
+    var pagesDone by remember { mutableIntStateOf(0) }
+    val context = androidx.compose.ui.platform.LocalContext.current
     var query by rememberSaveable { mutableStateOf("") }
     var submitted by rememberSaveable { mutableStateOf("") }
     var region by rememberSaveable { mutableStateOf<String?>(null) }
@@ -48,19 +51,27 @@ fun SystemScreen(code: String, onBack: () -> Unit, onGame: (Game) -> Unit) {
 
     val state by produceState<Load<List<Game>>>(Load.Loading, section, submitted, retry) {
         value = Load.Loading
+        pagesDone = 0
         value = try {
             Load.Ok(
                 when {
                     submitted.isNotBlank() -> Vimm.search(submitted, code)
-                    section == TOP -> Vimm.topGames(code)
+                    section == ALL -> Vimm.allGames(code) { partial, n ->
+                        pagesDone = n
+                        if (partial.isNotEmpty()) value = Load.Ok(partial)
+                    }
                     else -> Vimm.section(code, section)
                 }
-            )
+            ).also { pagesDone = Vimm.sections.size }
         } catch (e: Exception) {
             Load.Err(e.message ?: "Couldn't reach vimm.net")
         }
     }
-    val games = (state as? Load.Ok)?.value.orEmpty()
+    val raw = (state as? Load.Ok)?.value.orEmpty()
+    // vimm's own Top 10 for the system leads the "Top rated" order.
+    val topIds by produceState(emptyList<Int>(), code) { value = runCatching { Vimm.topGames(code).map { it.id } }.getOrDefault(emptyList()) }
+    val games = remember(raw, byRating, topIds) { if (byRating) rankTopRated(raw, topIds) else raw.sortedBy { it.title.lowercase() } }
+    LaunchedEffect(games.take(40).map { it.id }) { prefetchArt(context, games) }
     val regions = games.flatMap { it.regions }.groupingBy { it }.eachCount()
         .entries.sortedByDescending { it.value }.take(10).map { it.key }
 
@@ -110,7 +121,7 @@ fun SystemScreen(code: String, onBack: () -> Unit, onGame: (Game) -> Unit) {
                         selected = s == section,
                         onClick = { section = s; region = null },
                         modifier = Modifier.focusRing(RoundedCornerShape(8.dp), 1.08f),
-                        label = { Text(if (s == TOP) "★ Top rated" else s, fontWeight = FontWeight.Bold) },
+                        label = { Text(if (s == ALL) "All games" else s, fontWeight = FontWeight.Bold) },
                     )
                 }
             }
@@ -119,11 +130,27 @@ fun SystemScreen(code: String, onBack: () -> Unit, onGame: (Game) -> Unit) {
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp))
         }
 
+        // Count, sort switch and loading progress.
+        if (state is Load.Ok) {
+            Row(Modifier.padding(start = 16.dp, end = 12.dp, top = 2.dp), verticalAlignment = Alignment.CenterVertically) {
+                val shownCount = if (region == null) games.size else games.count { region in it.regions }
+                val loadingAll = section == ALL && submitted.isBlank() && pagesDone < Vimm.sections.size
+                Text(
+                    "$shownCount games" + if (loadingAll) " · loading ${pagesDone * 100 / Vimm.sections.size}%" else "",
+                    color = Muted, style = MaterialTheme.typography.labelLarge,
+                )
+                if (!loadingAll && section == ALL && submitted.isBlank() && Vimm.incomplete) {
+                    TextButton(onClick = { retry++ }) { Text("Some letters didn't load · Retry") }
+                }
+                Spacer(Modifier.weight(1f))
+                SortToggle(byRating) { byRating = it }
+            }
+        }
         when (val s = state) {
             Load.Loading -> SkeletonGrid()
             is Load.Err -> CenterMessage(s.message, "Try again") { retry++ }
             is Load.Ok -> {
-                val shown = if (region == null) s.value else s.value.filter { region in it.regions }
+                val shown = if (region == null) games else games.filter { region in it.regions }
                 if (shown.isEmpty()) CenterMessage("No games here") else GameGrid(shown, onGame)
             }
         }
@@ -155,4 +182,42 @@ private fun RegionPicker(regions: List<String>, selected: String?, onPick: (Stri
             }
         }
     }
+}
+
+/** "Top rated" / "A–Z" segmented switch. */
+@Composable
+private fun SortToggle(byRating: Boolean, onChange: (Boolean) -> Unit) {
+    SingleChoiceSegmentedButtonRow(Modifier.width(330.dp)) {
+        SegmentedButton(
+            selected = byRating, onClick = { onChange(true) },
+            shape = SegmentedButtonDefaults.itemShape(0, 2),
+            modifier = Modifier.focusRing(RoundedCornerShape(50), 1.04f),
+        ) { Text("★ Top rated", maxLines = 1, softWrap = false) }
+        SegmentedButton(
+            selected = !byRating, onClick = { onChange(false) },
+            shape = SegmentedButtonDefaults.itemShape(1, 2),
+            modifier = Modifier.focusRing(RoundedCornerShape(50), 1.04f),
+        ) { Text("A–Z") }
+    }
+}
+
+/** Re-releases, chips, pirates, demos and the like: they tend to have a perfect score from a vote or two. */
+private val sideRelease = Regex(
+    """\((?:[^)]*\b)?(Virtual Console|Switch Online|Classic Mini|Enhancement Chip|Competition|Pirate|Proto|Prototype|Beta|Demo|Sample|Kiosk|BIOS|Program|Test|Collection|Evercade|Aftermarket|Unl)\b""",
+    RegexOption.IGNORE_CASE,
+)
+
+/**
+ * "Top rated" order: vimm's Top 10 first, then regular releases by rating (a lone 10.0 usually
+ * means one or two votes, so it counts a little lower), then side releases, then unrated games.
+ */
+internal fun rankTopRated(games: List<Game>, topIds: List<Int>): List<Game> {
+    fun junk(g: Game) = sideRelease.containsMatchIn(g.title) || g.tags.any { it == "Unlicensed" || it == "Hack" || it == "Prototype" }
+    fun score(g: Game): Double = g.rating?.toDoubleOrNull()?.let { if (it >= 9.95) it - 1.2 else it } ?: -1.0
+    return games.sortedWith(
+        compareBy<Game> { topIds.indexOf(it.id).let { i -> if (i < 0) Int.MAX_VALUE else i } }
+            .thenBy { if (it.rating == null) 2 else if (junk(it)) 1 else 0 }
+            .thenByDescending { score(it) }
+            .thenBy { it.title.lowercase() }
+    )
 }

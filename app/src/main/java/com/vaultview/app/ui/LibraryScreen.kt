@@ -43,7 +43,7 @@ import com.vaultview.app.data.RetroAchievements
 import com.vaultview.app.data.Settings
 import kotlinx.coroutines.launch
 
-private enum class Grouping(val label: String) { SYSTEM("Systems"), MAKER("Makers"), PLAYED("Recently played"), RECENT("Recently added") }
+private enum class Grouping(val label: String) { SYSTEM("Systems"), MAKER("Manufacturers"), PLAYED("Recently played"), RECENT("Recently added") }
 
 @Composable
 fun LibraryScreen(onOpen: (LibraryGame) -> Unit) {
@@ -92,7 +92,9 @@ fun LibraryScreen(onOpen: (LibraryGame) -> Unit) {
                     when {
                         Settings.folderUri == null -> "Pick your ROMs folder to see what's on this device"
                         Library.scanning && Library.games.isEmpty() -> "Looking through ${Settings.folderLabel()}…"
-                        else -> "${Library.games.size} games · $systems systems · ${Settings.folderLabel()}"
+                        else -> "${Library.games.size} games · $systems systems" +
+                            (Playtime.records.values.sumOf { it.seconds }.takeIf { it > 0 }?.let { " · ${Playtime.format(it)} played" } ?: "") +
+                            " · ${Settings.folderLabel()}"
                     },
                     color = Muted, style = MaterialTheme.typography.bodySmall,
                 )
@@ -218,7 +220,7 @@ fun LibrarySheet(g: LibraryGame, onDismiss: () -> Unit, onVimm: (Int) -> Unit) {
     val wide = LocalWide.current
     var picking by remember { mutableStateOf(false) }
     var problem by remember { mutableStateOf<String?>(null) }
-    val v = Emulators.version // re-read the choice after it changes
+    val v = Emulators.version // re-read the choice after it changes or an emulator gets installed
     val choice = remember(g.key, v) { Emulators.effectiveChoice(context, g.system?.code) }
     val played = Playtime.of(g)
     val ra by produceState<RaState>(RaState.Loading, g.key) {

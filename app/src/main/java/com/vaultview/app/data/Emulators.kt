@@ -27,6 +27,44 @@ object Emulators {
         val build: (Intent, Rom, String /* package */) -> Unit,
     )
 
+    /** Where to get an emulator that isn't installed yet. */
+    sealed interface Source {
+        /** Latest GitHub release; [pick] chooses the right APK from the release's file names. */
+        data class GitHub(val repo: String, val pick: (List<String>) -> String?) : Source
+        /** libretro's official RetroArch build (64-bit). */
+        data object RetroArchBuildbot : Source
+        data class PlayStore(val pkg: String) : Source
+    }
+
+    /** Best source for each emulator. Play Store when that's the only official channel. */
+    val sources: Map<String, Source> = mapOf(
+        "retroarch" to Source.RetroArchBuildbot,
+        "duckstation" to Source.PlayStore("com.github.stenzek.duckstation"),
+        "nethersx2" to Source.GitHub("Trixarian/NetherSX2-patch") { n -> n.firstOrNull { it.endsWith(".apk") } },
+        "armsx2" to Source.GitHub("ARMSX2/ARMSX2") { n ->
+            // Builds are per Android version ("…-sdk33.apk"): take the newest one this device can run.
+            val sdk = android.os.Build.VERSION.SDK_INT
+            n.filter { it.endsWith(".apk") }
+                .mapNotNull { name -> Regex("""sdk(\d+)""").find(name)?.groupValues?.get(1)?.toIntOrNull()?.let { it to name } }
+                .filter { it.first <= sdk }.maxByOrNull { it.first }?.second
+        },
+        "ppsspp" to Source.PlayStore("org.ppsspp.ppsspp"),
+        "dolphin" to Source.PlayStore("org.dolphinemu.dolphinemu"),
+        "azahar" to Source.GitHub("azahar-emu/azahar") { n -> n.firstOrNull { it.endsWith(".apk") && "vanilla" in it } ?: n.firstOrNull { it.endsWith(".apk") } },
+        "melonds" to Source.GitHub("rafaelvcaetano/melonDS-android") { n -> n.firstOrNull { it.endsWith(".apk") } },
+        "drastic" to Source.PlayStore("com.dsemu.drastic"),
+        "flycast" to Source.GitHub("flyinghead/flycast") { n -> n.firstOrNull { it.endsWith(".apk") } },
+        "redream" to Source.PlayStore("io.recompiled.redream"),
+        "m64plusfz" to Source.PlayStore("org.mupen64plusae.v3.fzurita"),
+        "myboy" to Source.PlayStore("com.fastemulator.gba"),
+        "pizzaboygba" to Source.PlayStore("it.dbtecno.pizzaboygba"),
+        "cemu" to Source.GitHub("SSimco/Cemu") { n -> n.firstOrNull { it.endsWith(".apk") } },
+        "aps3e" to Source.GitHub("aenu1/aps3e") { n -> n.firstOrNull { it.endsWith(".apk") } },
+    )
+
+    /** Bumped when VaultView comes back to the front, so "installed" checks run again. */
+    fun refresh() { version++ }
+
     /** A game file, as a document link and (when on regular storage) a plain path. */
     class Rom(val uri: Uri, val path: String?)
 

@@ -2,6 +2,9 @@ package com.vaultview.app.data
 
 import android.content.Context
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.async
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.withContext
 import okhttp3.Cache
 import okhttp3.HttpUrl.Companion.toHttpUrl
@@ -35,6 +38,7 @@ object Vimm {
         private set
 
     private val memo = ConcurrentHashMap<String, List<Game>>()
+    private lateinit var listDir: java.io.File
     /** MD5s of vimm.net's two "image not found" pictures, in both the PNG and JPEG forms it serves. */
     private val missingImageHashes = setOf(
         "1d9f7728035c43225ddb91608ef94a36", "ebe5cdf2dc42fbe37e567c41b37ec9ea", // 250x100 banner
@@ -44,6 +48,7 @@ object Vimm {
 
     fun init(context: Context) {
         client = buildClient(Cache(context.cacheDir.resolve("http"), 20L * 1024 * 1024))
+        listDir = context.filesDir.resolve("lists").apply { mkdirs() }
     }
 
     internal fun buildClient(cache: Cache?): OkHttpClient =
@@ -136,14 +141,106 @@ object Vimm {
         parseRows(get(url), code?.let { Systems.byCode(it)?.name })
     }
 
-    private suspend fun cached(key: String, load: suspend () -> List<Game>): List<Game> =
-        memo[key] ?: load().also { memo[key] = it }
-
-    private suspend fun get(url: String): Document = withContext(Dispatchers.IO) {
-        client.newCall(Request.Builder().url(url).build()).execute().use { res ->
-            if (!res.isSuccessful) throw IOException("vimm.net returned HTTP ${res.code}")
-            Jsoup.parse(res.body!!.string(), url)
+    /**
+     * Lists are kept on disk so screens open instantly. Anything older than a day is fetched again
+     * in the background; if the network fails, the saved copy is still used.
+     */
+    private suspend fun cached(key: String, load: suspend () -> List<Game>): List<Game> {
+        memo[key]?.let { return it }
+        val file = listDir.resolve(key.replace(Regex("[^A-Za-z0-9._-]"), "_") + ".json")
+        val saved = withContext(Dispatchers.IO) { runCatching { if (file.exists()) readList(file.readText()) else null }.getOrNull() }
+        val maxAge = if (key.startsWith("sec:")) 3 * 24 * 3600 * 1000L else 24 * 3600 * 1000L
+        val fresh = file.exists() && System.currentTimeMillis() - file.lastModified() < maxAge
+        if (saved != null && fresh) return saved.also { memo[key] = it }
+        return try {
+            load().also { list ->
+                memo[key] = list
+                withContext(Dispatchers.IO) { runCatching { file.writeText(writeList(list)) } }
+            }
+        } catch (e: Exception) {
+            saved?.also { memo[key] = it } ?: throw e
         }
+    }
+
+    /** Peek at a saved list without touching the network (used for quick animations). */
+    fun savedNow(key: String): List<Game>? = memo[key]
+
+    private fun writeList(list: List<Game>): String = org.json.JSONArray().apply {
+        list.forEach { g ->
+            put(org.json.JSONObject().apply {
+                put("i", g.id); put("t", g.title); put("s", g.system ?: ""); put("v", g.version ?: "")
+                put("r", g.rating ?: ""); put("m", g.media ?: "")
+                put("g", org.json.JSONArray(g.regions)); put("x", org.json.JSONArray(g.tags))
+            })
+        }
+    }.toString()
+
+    private fun readList(json: String): List<Game> {
+        val a = org.json.JSONArray(json)
+        return List(a.length()) { i ->
+            val o = a.getJSONObject(i)
+            fun arr(k: String) = o.optJSONArray(k)?.let { x -> List(x.length()) { x.getString(it) } } ?: emptyList()
+            Game(o.getInt("i"), o.getString("t"), o.optString("s").ifBlank { null }, arr("g"),
+                o.optString("v").ifBlank { null }, o.optString("r").ifBlank { null }, o.optString("m").ifBlank { null }, arr("x"))
+        }
+    }
+
+    val sections = listOf("#") + ('A'..'Z').map { it.toString() }
+
+    /**
+     * Every game for a system: all letter pages, loaded a few at a time.
+     * Calls [onPartial] as pages arrive so the screen can fill in progressively.
+     */
+    suspend fun allGames(code: String, onPartial: (List<Game>, Int) -> Unit): List<Game> = kotlinx.coroutines.coroutineScope {
+        val done = java.util.concurrent.atomic.AtomicInteger(0)
+        val failed = java.util.concurrent.atomic.AtomicInteger(0)
+        val results = java.util.concurrent.ConcurrentHashMap<String, List<Game>>()
+        sections.map { s ->
+            async {
+                runCatching { section(code, s) }.onSuccess { results[s] = it }.onFailure { failed.incrementAndGet() }
+                val n = done.incrementAndGet()
+                val partial = sections.flatMap { results[it].orEmpty() }
+                withContext(Dispatchers.Main) { onPartial(partial, n) }
+            }
+        }.forEach { it.await() }
+        if (results.isEmpty()) throw IOException("vimm.net is busy right now. Try again in a minute.")
+        incomplete = failed.get() > 0
+        sections.flatMap { results[it].orEmpty() }.distinctBy { it.id }
+    }
+
+    /** True if the last all-games load had to skip letters (the screen offers to retry). */
+    @Volatile var incomplete = false
+
+    // vimm.net answers "429 Too Many Requests" if pages are fetched too fast, so every page
+    // request goes through here: at most two at a time, spaced out, and retried after a pause.
+    private val gate = kotlinx.coroutines.sync.Semaphore(2)
+    private val spacing = kotlinx.coroutines.sync.Mutex()
+    @Volatile private var nextSlot = 0L
+
+    private suspend fun get(url: String): Document = gate.withPermit {
+        var attempt = 0
+        while (true) {
+            spacing.withLock {
+                val wait = nextSlot - System.currentTimeMillis()
+                if (wait > 0) kotlinx.coroutines.delay(wait)
+                nextSlot = System.currentTimeMillis() + 350
+            }
+            val result = withContext(Dispatchers.IO) {
+                client.newCall(Request.Builder().url(url).build()).execute().use { res ->
+                    when {
+                        res.code == 429 || res.code == 503 -> res.header("Retry-After")?.toLongOrNull()?.times(1000) ?: -1L
+                        !res.isSuccessful -> throw IOException("vimm.net returned HTTP ${res.code}")
+                        else -> Jsoup.parse(res.body!!.string(), url)
+                    }
+                }
+            }
+            if (result is Document) return@withPermit result
+            attempt++
+            if (attempt > 4) throw IOException("vimm.net is busy right now. Try again in a minute.")
+            val pause = (result as Long).takeIf { it > 0 } ?: (1500L shl (attempt - 1)) // 1.5s, 3s, 6s, 12s
+            spacing.withLock { nextSlot = maxOf(nextSlot, System.currentTimeMillis() + pause) }
+        }
+        @Suppress("UNREACHABLE_CODE") throw IllegalStateException()
     }
 
     internal fun parseRows(doc: Document, system: String?): List<Game> =

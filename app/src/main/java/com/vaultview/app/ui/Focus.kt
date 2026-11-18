@@ -106,10 +106,12 @@ fun Modifier.initialFocus(delayMs: Long = 320): Modifier = composed {
 
 /** Items rise and fade in, a little after the one before, when a screen first fills. */
 fun Modifier.staggerIn(index: Int): Modifier = composed {
-    val a = remember { Animatable(0f) }
+    val first = index < 18
+    val a = remember { Animatable(if (first) 0f else 1f) }
     LaunchedEffect(Unit) {
-        delay((index.coerceAtMost(14) * 28L))
-        a.animateTo(1f, spring(dampingRatio = 0.8f, stiffness = Spring.StiffnessLow))
+        if (!first) return@LaunchedEffect
+        delay(index * 24L)
+        a.animateTo(1f, spring(dampingRatio = 0.82f, stiffness = Spring.StiffnessMediumLow))
     }
     this.graphicsLayer {
         alpha = a.value
@@ -134,12 +136,31 @@ fun Modifier.shimmer(): Modifier = composed {
     }
 }
 
-/** Material "video library" glyph (stacked cases with a play mark). */
+/** A game cartridge: rounded shell, a label window, and contacts at the bottom. */
 val LibraryIcon: ImageVector by lazy {
     ImageVector.Builder("Library", 24.dp, 24.dp, 24f, 24f)
-        .addPath(PathParser().parsePathString(
-            "M4,6H2v14c0,1.1 0.9,2 2,2h14v-2H4V6zM20,2H8C6.9,2 6,2.9 6,4v12c0,1.1 0.9,2 2,2h12c1.1,0 2,-0.9 2,-2V4C22,2.9 21.1,2 20,2zM12,14.5v-9l6,4.5L12,14.5z"
-        ).toNodes(), fill = SolidColor(Color.Black))
+        .addPath(
+            PathParser().parsePathString(
+                "M6.5,2h11a2.5,2.5 0 0,1 2.5,2.5v13a2.5,2.5 0 0,1 -2.5,2.5h-1.5v2h-8v-2h-1.5a2.5,2.5 0 0,1 -2.5,-2.5v-13a2.5,2.5 0 0,1 2.5,-2.5z" +
+                    "M7.5,5v7.5h9V5z" + "M9,16.5h1.5v2H9z M11.25,16.5h1.5v2h-1.5z M13.5,16.5H15v2h-1.5z"
+            ).toNodes(),
+            fill = SolidColor(Color.Black), pathFillType = androidx.compose.ui.graphics.PathFillType.EvenOdd,
+        )
+        .build()
+}
+
+/** Browse: a 2x2 of rounded tiles, one of them a disc. */
+val BrowseIcon: ImageVector by lazy {
+    ImageVector.Builder("Browse", 24.dp, 24.dp, 24f, 24f)
+        .addPath(
+            PathParser().parsePathString(
+                "M5,3h4a2,2 0 0,1 2,2v4a2,2 0 0,1 -2,2h-4a2,2 0 0,1 -2,-2v-4a2,2 0 0,1 2,-2z" +
+                    "M15,3h4a2,2 0 0,1 2,2v4a2,2 0 0,1 -2,2h-4a2,2 0 0,1 -2,-2v-4a2,2 0 0,1 2,-2z" +
+                    "M5,13h4a2,2 0 0,1 2,2v4a2,2 0 0,1 -2,2h-4a2,2 0 0,1 -2,-2v-4a2,2 0 0,1 2,-2z" +
+                    "M17,13a4,4 0 1,1 0,8a4,4 0 1,1 0,-8z M17,15.75a1.25,1.25 0 1,0 0,2.5a1.25,1.25 0 1,0 0,-2.5z"
+            ).toNodes(),
+            fill = SolidColor(Color.Black), pathFillType = androidx.compose.ui.graphics.PathFillType.EvenOdd,
+        )
         .build()
 }
 

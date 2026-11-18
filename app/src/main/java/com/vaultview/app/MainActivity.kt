@@ -181,5 +181,7 @@ class MainActivity : ComponentActivity() {
         super.onResume()
         // Back from an emulator: count the time played.
         com.vaultview.app.data.Playtime.finish()
+        // Might be back from installing an emulator.
+        com.vaultview.app.data.Emulators.refresh()
     }
 }
