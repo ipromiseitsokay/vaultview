@@ -19,7 +19,10 @@ data class GameSystem(
     val year: Int,
     val handheld: Boolean = false,
     val folder: String = code.lowercase(), // ES-DE / RetroArch-style ROM folder name
-)
+) {
+    /** Folder name on thumbnails.libretro.com, used to fill in missing box art. */
+    val libretro: String? get() = Systems.libretroNames[code]
+}
 
 object Systems {
     val all = listOf(
@@ -65,6 +68,21 @@ object Systems {
         GameSystem("TGCD", "TurboGrafx-CD", Brand.NEC, 1988, folder = "tg-cd"),
 
         GameSystem("CDi", "CD-i", Brand.PHILIPS, 1991, folder = "cdimono1"),
+    )
+
+    val libretroNames = mapOf(
+        "NES" to "Nintendo - Nintendo Entertainment System", "SNES" to "Nintendo - Super Nintendo Entertainment System",
+        "N64" to "Nintendo - Nintendo 64", "GameCube" to "Nintendo - GameCube", "Wii" to "Nintendo - Wii",
+        "WiiU" to "Nintendo - Wii U", "GB" to "Nintendo - Game Boy", "GBC" to "Nintendo - Game Boy Color",
+        "GBA" to "Nintendo - Game Boy Advance", "DS" to "Nintendo - Nintendo DS", "3DS" to "Nintendo - Nintendo 3DS",
+        "VB" to "Nintendo - Virtual Boy", "PS1" to "Sony - PlayStation", "PS2" to "Sony - PlayStation 2",
+        "PS3" to "Sony - PlayStation 3", "PSP" to "Sony - PlayStation Portable", "SMS" to "Sega - Master System - Mark III",
+        "Genesis" to "Sega - Mega Drive - Genesis", "SegaCD" to "Sega - Mega-CD - Sega CD", "32X" to "Sega - 32X",
+        "Saturn" to "Sega - Saturn", "Dreamcast" to "Sega - Dreamcast", "GG" to "Sega - Game Gear",
+        "Xbox" to "Microsoft - Xbox", "Xbox360" to "Microsoft - Xbox 360", "Atari2600" to "Atari - 2600",
+        "Atari5200" to "Atari - 5200", "Atari7800" to "Atari - 7800", "Jaguar" to "Atari - Jaguar",
+        "Lynx" to "Atari - Lynx", "TG16" to "NEC - PC Engine - TurboGrafx 16",
+        "TGCD" to "NEC - PC Engine CD - TurboGrafx-CD", "CDi" to "Philips - CD-i",
     )
 
     fun byCode(code: String) = all.firstOrNull { it.code == code }

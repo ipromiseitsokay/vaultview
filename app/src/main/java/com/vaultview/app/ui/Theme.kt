@@ -1,6 +1,11 @@
 package com.vaultview.app.ui
 
+import androidx.compose.material.ripple.RippleAlpha
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.LocalRippleConfiguration
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.RippleConfiguration
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
@@ -38,5 +43,15 @@ private val scheme = darkColorScheme(
     outlineVariant = Color(0xFF2A3040),
 )
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun VaultTheme(content: @Composable () -> Unit) = MaterialTheme(colorScheme = scheme, content = content)
+fun VaultTheme(content: @Composable () -> Unit) = MaterialTheme(colorScheme = scheme) {
+    // Chips, buttons and tabs get a clearly visible highlight when the D-pad is on them.
+    CompositionLocalProvider(
+        LocalRippleConfiguration provides RippleConfiguration(
+            color = Color.White,
+            rippleAlpha = RippleAlpha(pressedAlpha = 0.22f, focusedAlpha = 0.30f, draggedAlpha = 0.16f, hoveredAlpha = 0.10f),
+        ),
+        content = content,
+    )
+}

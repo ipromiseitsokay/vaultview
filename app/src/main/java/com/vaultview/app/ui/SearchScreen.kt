@@ -38,20 +38,13 @@ fun SearchScreen(onGame: (Game) -> Unit) {
     Column(Modifier.fillMaxSize()) {
         Text("Search", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Black,
             modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp))
-        OutlinedTextField(
-            value = query,
-            onValueChange = { query = it },
-            placeholder = { Text("Game title") },
-            leadingIcon = { Icon(Icons.Filled.Search, null) },
-            trailingIcon = { if (query.isNotEmpty()) IconButton(onClick = { query = ""; submitted = "" }) { Icon(Icons.Filled.Close, "Clear") } },
-            singleLine = true,
-            shape = MaterialTheme.shapes.extraLarge,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = { submitted = query.trim(); focus.clearFocus(); keyboard?.hide() }),
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+        SearchBox(
+            query = query, onQueryChange = { query = it }, placeholder = "Game title",
+            onSubmit = { submitted = query.trim() }, onClear = { query = ""; submitted = "" },
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).initialFocus(),
         )
         Box(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-            FilledTonalButton(onClick = { menu = true }) {
+            FilledTonalButton(onClick = { menu = true }, modifier = Modifier.focusRing(androidx.compose.foundation.shape.RoundedCornerShape(50))) {
                 Text(system?.let { Systems.byCode(it)?.name } ?: "All systems")
                 Icon(Icons.Filled.ArrowDropDown, null)
             }

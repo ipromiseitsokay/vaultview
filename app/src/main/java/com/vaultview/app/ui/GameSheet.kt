@@ -100,7 +100,7 @@ fun GameSheet(game: Game, onDismiss: () -> Unit, onGet: () -> Unit) {
     ) {
         if (wide) {
             Row(Modifier.padding(horizontal = 24.dp).padding(bottom = 24.dp), horizontalArrangement = Arrangement.spacedBy(20.dp)) {
-                CoverArt(game.id, game.title, Modifier.width(170.dp).aspectRatio(0.75f).clip(RoundedCornerShape(14.dp)))
+                CoverArt(game.id, game.title, Modifier.width(170.dp).aspectRatio(0.75f).clip(RoundedCornerShape(14.dp)), game.system, game.regions)
                 Column(Modifier.weight(1f).verticalScroll(rememberScrollState())) {
                     info()
                     Spacer(Modifier.height(16.dp))
@@ -111,7 +111,7 @@ fun GameSheet(game: Game, onDismiss: () -> Unit, onGet: () -> Unit) {
         } else {
             Column(Modifier.verticalScroll(rememberScrollState()).padding(horizontal = 20.dp).padding(bottom = 28.dp)) {
                 Row {
-                    CoverArt(game.id, game.title, Modifier.width(132.dp).aspectRatio(0.75f).clip(RoundedCornerShape(14.dp)))
+                    CoverArt(game.id, game.title, Modifier.width(132.dp).aspectRatio(0.75f).clip(RoundedCornerShape(14.dp)), game.system, game.regions)
                     Spacer(Modifier.width(16.dp))
                     Column(Modifier.weight(1f)) { info() }
                 }
@@ -124,7 +124,7 @@ fun GameSheet(game: Game, onDismiss: () -> Unit, onGet: () -> Unit) {
         }
     }
     // Controller users land on the main action straight away.
-    LaunchedEffect(Unit) { runCatching { kotlinx.coroutines.delay(350); getFocus.requestFocus() } }
+    LaunchedEffect(Unit) { if (com.vaultview.app.Controls.usingController) runCatching { kotlinx.coroutines.delay(350); getFocus.requestFocus() } }
 }
 
 @Composable

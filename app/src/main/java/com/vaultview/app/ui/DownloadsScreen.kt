@@ -6,6 +6,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Close
@@ -41,7 +42,9 @@ fun DownloadsScreen(onGame: (Game) -> Unit) {
             CenterMessage("Games you download show up here")
         } else {
             LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                items(Downloads.items, key = { it.key }) { d -> Box(Modifier.animateItem()) { Row(d, onGame) } }
+                itemsIndexed(Downloads.items, key = { _, d -> d.key }) { i, d ->
+                    Box(Modifier.animateItem().staggerIn(i).then(if (i == 0) Modifier.initialFocus() else Modifier)) { Row(d, onGame) }
+                }
             }
         }
     }
@@ -53,7 +56,7 @@ private fun Row(d: DownloadItem, onGame: (Game) -> Unit) {
     Surface(color = Panel, shape = shape, modifier = Modifier.fillMaxWidth().focusRing(shape, 1.01f).clip(shape)
         .clickable { onGame(Game(d.gameId, d.title, d.system?.name)) }) {
         Row(Modifier.padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
-            CoverArt(d.gameId, null, Modifier.width(54.dp).aspectRatio(0.75f).clip(RoundedCornerShape(8.dp)))
+            CoverArt(d.gameId, d.title, Modifier.width(54.dp).aspectRatio(0.75f).clip(RoundedCornerShape(8.dp)), d.system?.code)
             Spacer(Modifier.width(14.dp))
             Column(Modifier.weight(1f)) {
                 Text(d.title, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)

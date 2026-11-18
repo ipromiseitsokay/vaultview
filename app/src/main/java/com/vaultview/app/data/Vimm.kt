@@ -80,6 +80,24 @@ object Vimm {
     fun screenshot(id: Int) = "https://dl.vimm.net/image.php?type=screen&id=$id"
     fun gamePage(id: Int) = "$BASE/vault/$id"
 
+    /**
+     * Likely box-art URLs on thumbnails.libretro.com (No-Intro style names), best guess first.
+     * vimm writes "Zelda, The: A Link to the Past"; No-Intro writes "Zelda, The - A Link to the Past (USA)".
+     */
+    fun libretroBoxArt(system: String?, title: String?, regions: List<String>): List<String> {
+        val folder = Systems.find(system)?.libretro ?: return emptyList()
+        if (title.isNullOrBlank()) return emptyList()
+        val name = title.replace(Regex("\\s*\\((NP|Hack|Proto|Beta)\\)\\s*$"), "").replace(": ", " - ").trim()
+        val tags = buildList {
+            if (regions.size > 1) add(regions.joinToString(", "))
+            addAll(regions)
+            addAll(listOf("USA", "World", "Europe", "Japan"))
+        }.distinct().take(4)
+        fun clean(s: String) = s.replace(Regex("[&*/:`<>?\\\\|\"]"), "_")
+        fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8").replace("+", "%20")
+        return tags.map { "https://thumbnails.libretro.com/${enc(folder)}/Named_Boxarts/${enc(clean("$name ($it)"))}.png" }
+    }
+
     /** Top-rated games shown on a system's landing page. */
     suspend fun topGames(code: String): List<Game> = cached("top:$code") {
         parseTop(get("$BASE/vault/$code"), Systems.byCode(code)?.name)

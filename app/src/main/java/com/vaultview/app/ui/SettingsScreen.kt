@@ -37,7 +37,7 @@ fun SettingsScreen() {
             Text("Download folder", fontWeight = FontWeight.SemiBold)
             Text(Settings.folderLabel() ?: "Not chosen yet", color = Muted, style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(8.dp))
-            FilledTonalButton(onClick = { pickFolder.launch(null) }) {
+            FilledTonalButton(onClick = { pickFolder.launch(null) }, modifier = Modifier.initialFocus().focusRing(RoundedCornerShape(50))) {
                 Text(if (Settings.folderUri == null) "Choose folder" else "Change folder")
             }
             HorizontalDivider(Modifier.padding(vertical = 12.dp))

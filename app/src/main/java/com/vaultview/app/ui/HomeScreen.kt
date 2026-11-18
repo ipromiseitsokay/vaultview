@@ -15,6 +15,7 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.*
@@ -85,10 +86,14 @@ fun HomeScreen(onSystem: (String) -> Unit, onGame: (Game) -> Unit) {
         if (library.isNotEmpty()) {
             item(span = full) { SectionLabel("Recently downloaded") }
             item(span = full) {
-                LazyRow(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(14.dp),
+                    contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp),
+                    modifier = Modifier.bleed(10.dp),
+                ) {
                     items(library, key = { it.key }) { d ->
                         val g = Game(d.gameId, d.title, d.system?.name)
-                        Box(Modifier.width(if (wide) 104.dp else 96.dp)) { GameCard(g, showSystem = true) { onGame(g) } }
+                        Box(Modifier.width(if (wide) 104.dp else 96.dp)) { GameCard(g.copy(system = d.system?.code), showSystem = true) { onGame(g) } }
                     }
                 }
             }
@@ -98,11 +103,15 @@ fun HomeScreen(onSystem: (String) -> Unit, onGame: (Game) -> Unit) {
         }
         if (consoles.isNotEmpty()) {
             item(span = full, key = "consoles") { SectionLabel("Consoles") }
-            items(consoles, key = { it.code }) { s -> Box(Modifier.animateItem()) { SystemCard(s) { onSystem(s.code) } } }
+            itemsIndexed(consoles, key = { _, s -> s.code }) { i, s ->
+                Box(Modifier.animateItem().staggerIn(i).then(if (i == 0) Modifier.initialFocus() else Modifier)) { SystemCard(s) { onSystem(s.code) } }
+            }
         }
         if (handhelds.isNotEmpty()) {
             item(span = full, key = "handhelds") { SectionLabel("Handhelds") }
-            items(handhelds, key = { it.code }) { s -> Box(Modifier.animateItem()) { SystemCard(s) { onSystem(s.code) } } }
+            itemsIndexed(handhelds, key = { _, s -> s.code }) { i, s ->
+                Box(Modifier.animateItem().staggerIn(consoles.size + i)) { SystemCard(s) { onSystem(s.code) } }
+            }
         }
     }
     }
@@ -116,7 +125,11 @@ private fun SectionLabel(text: String) = Text(
 
 @Composable
 private fun BrandPicker(selected: Brand?, wide: Boolean, onPick: (Brand?) -> Unit) {
-    LazyRow(horizontalArrangement = Arrangement.spacedBy(10.dp), contentPadding = PaddingValues(vertical = 4.dp)) {
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(horizontal = 10.dp, vertical = 10.dp),
+        modifier = Modifier.bleed(10.dp),
+    ) {
         item { BrandTile("All", Systems.all.size, VimmRed.copy(red = 0.8f), selected == null, wide) { onPick(null) } }
         items(Brand.entries) { b ->
             BrandTile(b.label, Systems.all.count { it.brand == b }, b.color, selected == b, wide) { onPick(b) }

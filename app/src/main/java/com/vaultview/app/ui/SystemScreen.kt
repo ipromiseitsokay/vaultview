@@ -5,6 +5,8 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
@@ -63,18 +65,10 @@ fun SystemScreen(code: String, onBack: () -> Unit, onGame: (Game) -> Unit) {
         .entries.sortedByDescending { it.value }.take(10).map { it.key }
 
     val search: @Composable (Modifier) -> Unit = { m ->
-        OutlinedTextField(
-            value = query,
-            onValueChange = { query = it },
-            placeholder = { Text("Search ${sys.name}") },
-            leadingIcon = { Icon(Icons.Filled.Search, null) },
-            trailingIcon = {
-                if (query.isNotEmpty()) IconButton(onClick = { query = ""; submitted = "" }) { Icon(Icons.Filled.Close, "Clear") }
-            },
-            singleLine = true,
-            shape = MaterialTheme.shapes.extraLarge,
-            keyboardOptions = KeyboardOptions(imeAction = ImeAction.Search),
-            keyboardActions = KeyboardActions(onSearch = { submitted = query.trim(); region = null; focus.clearFocus(); keyboard?.hide() }),
+        SearchBox(
+            query = query, onQueryChange = { query = it }, placeholder = "Search ${sys.name}",
+            onSubmit = { submitted = query.trim(); region = null },
+            onClear = { query = ""; submitted = "" },
             modifier = m,
         )
     }
@@ -86,7 +80,7 @@ fun SystemScreen(code: String, onBack: () -> Unit, onGame: (Game) -> Unit) {
         ) {
             if (wide) {
                 Row(Modifier.padding(start = 4.dp, end = 16.dp, top = 8.dp, bottom = 4.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, "Back") }
+                    IconButton(onClick = onBack, modifier = Modifier.focusRing(CircleShape)) { Icon(Icons.Filled.ArrowBack, "Back") }
                     Title(sys, Modifier.widthIn(max = 260.dp))
                     Spacer(Modifier.width(16.dp))
                     search(Modifier.weight(1f).heightIn(min = 52.dp))
@@ -95,7 +89,7 @@ fun SystemScreen(code: String, onBack: () -> Unit, onGame: (Game) -> Unit) {
                 }
             } else {
                 Row(Modifier.padding(horizontal = 4.dp, vertical = 6.dp), verticalAlignment = Alignment.CenterVertically) {
-                    IconButton(onClick = onBack) { Icon(Icons.Filled.ArrowBack, "Back") }
+                    IconButton(onClick = onBack, modifier = Modifier.focusRing(CircleShape)) { Icon(Icons.Filled.ArrowBack, "Back") }
                     Title(sys, Modifier.weight(1f))
                     RegionPicker(regions, region) { region = it }
                     Spacer(Modifier.width(12.dp))
@@ -108,13 +102,14 @@ fun SystemScreen(code: String, onBack: () -> Unit, onGame: (Game) -> Unit) {
             val listState = rememberLazyListState(initialFirstVisibleItemIndex = sections.indexOf(section).coerceAtLeast(0))
             LazyRow(
                 state = listState,
-                contentPadding = PaddingValues(horizontal = 16.dp),
-                horizontalArrangement = Arrangement.spacedBy(6.dp),
+                contentPadding = PaddingValues(horizontal = 16.dp, vertical = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
             ) {
                 items(sections) { s ->
                     FilterChip(
                         selected = s == section,
                         onClick = { section = s; region = null },
+                        modifier = Modifier.focusRing(RoundedCornerShape(8.dp), 1.08f),
                         label = { Text(if (s == TOP) "★ Top rated" else s, fontWeight = FontWeight.Bold) },
                     )
                 }
@@ -149,7 +144,7 @@ private fun RegionPicker(regions: List<String>, selected: String?, onPick: (Stri
     if (regions.size < 2 && selected == null) return
     var open by remember { mutableStateOf(false) }
     Box {
-        FilledTonalButton(onClick = { open = true }) {
+        FilledTonalButton(onClick = { open = true }, modifier = Modifier.focusRing(RoundedCornerShape(50))) {
             Text(selected?.let { "${flag(it)} $it" } ?: "🌐 All regions", maxLines = 1)
             Icon(Icons.Filled.ArrowDropDown, null)
         }

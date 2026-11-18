@@ -154,6 +154,7 @@ fun GameScreen(id: Int, title: String, system: String?, onBack: () -> Unit, onSh
     var web by remember { mutableStateOf<WebView?>(null) }
     var phase by remember { mutableStateOf<Phase>(Phase.Loading) }
     var showPage by remember { mutableStateOf(false) }
+    var checkWaiting by remember { mutableStateOf(false) }
     var version by remember { mutableStateOf<String?>(null) }
     var pending by remember { mutableStateOf<DownloadRequest?>(null) }
     var askFolder by remember { mutableStateOf(false) }
@@ -183,6 +184,7 @@ fun GameScreen(id: Int, title: String, system: String?, onBack: () -> Unit, onSh
             p is Phase.Ready -> {
                 phase = p
                 showPage = false
+                checkWaiting = false
                 version = version ?: p.info.fields.firstOrNull { it.first == "mediaId" }?.second
             }
             // Once the button is showing, a background reload must not make the screen jump back.
@@ -201,6 +203,7 @@ fun GameScreen(id: Int, title: String, system: String?, onBack: () -> Unit, onSh
             factory = { ctx ->
                 WebView(ctx).apply {
                     setBackgroundColor(Bg.toArgb()) // no white flash while pages load
+                    isSoundEffectsEnabled = false
                     settings.javaScriptEnabled = true
                     settings.domStorageEnabled = true
                     CookieManager.getInstance().setAcceptCookie(true)
@@ -224,8 +227,8 @@ fun GameScreen(id: Int, title: String, system: String?, onBack: () -> Unit, onSh
                             CookieManager.getInstance().flush()
                             readPage(view)
                             view.postDelayed({ if (phase !is Phase.Ready) readPage(view) }, 2500)
-                            // Only show the site's page if it is still waiting on the human check.
-                            view.postDelayed({ if (phase is Phase.NeedsCheck) showPage = true }, 7000)
+                            // Never pop the page up by itself (that was the flash); offer a button instead.
+                            view.postDelayed({ if (phase is Phase.NeedsCheck || phase is Phase.Loading) checkWaiting = true }, 7000)
                         }
                         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                             val host = request.url.host.orEmpty()
@@ -238,12 +241,20 @@ fun GameScreen(id: Int, title: String, system: String?, onBack: () -> Unit, onSh
                     web = this
                 }
             },
+            update = { w ->
+                // While hidden, the page must not take the D-pad; otherwise you'd be steering an invisible page.
+                w.isFocusable = showPage
+                w.isFocusableInTouchMode = showPage
+                w.descendantFocusability = if (showPage) android.view.ViewGroup.FOCUS_AFTER_DESCENDANTS
+                    else android.view.ViewGroup.FOCUS_BLOCK_DESCENDANTS
+                if (!showPage) w.clearFocus()
+            },
         )
 
         AnimatedVisibility(visible = !showPage, enter = fadeIn(tween(250)), exit = fadeOut(tween(250))) {
             Box(Modifier.fillMaxSize().background(Bg)) {
                 GameDetails(
-                    id, title, sys?.name ?: system, phase, version, wide, downloadFocus, mine,
+                    id, title, sys?.name ?: system, phase, version, wide, downloadFocus, mine, checkWaiting,
                     onVersion = { version = it },
                     onDownload = { info ->
                         val fields = info.fields.map { if (it.first == "mediaId" && version != null) it.first to version!! else it }
@@ -261,7 +272,7 @@ fun GameScreen(id: Int, title: String, system: String?, onBack: () -> Unit, onSh
             Modifier.fillMaxWidth().height(64.dp).background(Bg).padding(horizontal = 4.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
-            IconButton(onClick = { if (showPage && phase is Phase.Ready) showPage = false else onBack() }) { Icon(Icons.Filled.ArrowBack, "Back") }
+            IconButton(onClick = { if (showPage && phase is Phase.Ready) showPage = false else onBack() }, modifier = Modifier.focusRing(androidx.compose.foundation.shape.CircleShape)) { Icon(Icons.Filled.ArrowBack, "Back") }
             Column(Modifier.weight(1f)) {
                 Text(title, fontWeight = FontWeight.Bold, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 if (showPage) Text(
@@ -277,7 +288,10 @@ fun GameScreen(id: Int, title: String, system: String?, onBack: () -> Unit, onSh
         }
     }
 
-    LaunchedEffect(phase is Phase.Ready) { if (phase is Phase.Ready) runCatching { kotlinx.coroutines.delay(300); downloadFocus.requestFocus() } }
+    LaunchedEffect(phase is Phase.Ready, checkWaiting) {
+        if ((phase is Phase.Ready || checkWaiting) && com.vaultview.app.Controls.usingController)
+            runCatching { kotlinx.coroutines.delay(300); downloadFocus.requestFocus() }
+    }
 
     if (askFolder) {
         AlertDialog(
@@ -299,7 +313,7 @@ fun GameScreen(id: Int, title: String, system: String?, onBack: () -> Unit, onSh
 @Composable
 private fun GameDetails(
     id: Int, title: String, system: String?, phase: Phase, version: String?, wide: Boolean, downloadFocus: FocusRequester,
-    mine: DownloadItem?,
+    mine: DownloadItem?, checkWaiting: Boolean,
     onVersion: (String) -> Unit, onDownload: (PageInfo) -> Unit, onShowPage: () -> Unit, onShowDownloads: () -> Unit, onRetry: () -> Unit,
 ) {
     // Entrance: art slides in, text rises, after the screen transition settles.
@@ -326,7 +340,15 @@ private fun GameDetails(
             ) { p ->
                 Column {
                     when (p) {
-                        Phase.Loading, Phase.NeedsCheck -> LoadingButton()
+                        Phase.Loading, Phase.NeedsCheck -> if (checkWaiting) {
+                            Text("vimm.net wants a quick human check before it shows the download.", color = Muted)
+                            Spacer(Modifier.height(12.dp))
+                            Button(
+                                onClick = onShowPage,
+                                modifier = Modifier.height(52.dp).focusRing(RoundedCornerShape(16.dp), 1.03f).focusRequester(downloadFocus),
+                                shape = RoundedCornerShape(16.dp),
+                            ) { Text("Do the check", fontWeight = FontWeight.Bold) }
+                        } else LoadingButton()
                         is Phase.Problem -> {
                             Text(p.message, color = Muted)
                             Spacer(Modifier.height(12.dp))
@@ -348,7 +370,7 @@ private fun GameDetails(
         if (wide) {
             Row(Modifier.fillMaxSize().padding(top = 64.dp).padding(24.dp), horizontalArrangement = Arrangement.spacedBy(28.dp)) {
                 AnimatedVisibility(shown, enter = artEnter) {
-                    CoverArt(id, title, Modifier.fillMaxHeight().aspectRatio(0.75f).clip(RoundedCornerShape(18.dp)))
+                    CoverArt(id, title, Modifier.fillMaxHeight().aspectRatio(0.75f).clip(RoundedCornerShape(18.dp)), system)
                 }
                 AnimatedVisibility(shown, enter = textEnter, modifier = Modifier.weight(1.25f)) {
                     Column(Modifier.verticalScroll(rememberScrollState())) { body() }
@@ -364,7 +386,7 @@ private fun GameDetails(
             Column(Modifier.fillMaxSize().padding(top = 64.dp).verticalScroll(rememberScrollState()).padding(20.dp)) {
                 AnimatedVisibility(shown, enter = artEnter) {
                     Row {
-                        CoverArt(id, title, Modifier.width(130.dp).aspectRatio(0.75f).clip(RoundedCornerShape(14.dp)))
+                        CoverArt(id, title, Modifier.width(130.dp).aspectRatio(0.75f).clip(RoundedCornerShape(14.dp)), system)
                         Spacer(Modifier.width(16.dp))
                         AsyncImage(
                             model = Vimm.screenshot(id), contentDescription = "Screenshot", contentScale = ContentScale.Fit,

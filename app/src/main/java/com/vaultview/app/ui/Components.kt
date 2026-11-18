@@ -15,6 +15,7 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.grid.LazyGridItemScope
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -53,18 +54,22 @@ private val regionFlags = mapOf(
 
 fun flag(region: String) = regionFlags[region] ?: region.take(3).uppercase()
 
-/** Box art drawn over a blurred copy of itself, so landscape and portrait boxes both fill the card.
- *  Falls back to the screenshot, then to a title card, when the site has no image. */
+/**
+ * Box art drawn over a blurred copy of itself, so landscape and portrait boxes both fill the card.
+ * If vimm.net has none, tries the libretro thumbnail archive, then the screenshot, then a title card.
+ */
 @Composable
-fun CoverArt(id: Int, title: String?, modifier: Modifier = Modifier) {
-    // 0 = box art, 1 = screenshot, 2 = nothing available
+fun CoverArt(id: Int, title: String?, modifier: Modifier = Modifier, system: String? = null, regions: List<String> = emptyList()) {
+    val sources = remember(id, system, regions) {
+        listOf(Vimm.boxArt(id)) + Vimm.libretroBoxArt(system, title, regions) + Vimm.screenshot(id)
+    }
     var stage by remember(id) { mutableIntStateOf(0) }
     var loaded by remember(id) { mutableStateOf(false) }
     Box(modifier.then(if (loaded) Modifier.background(PanelHi) else Modifier.shimmer())) {
-        if (stage == 2) {
+        if (stage >= sources.size) {
             Box(
                 Modifier.matchParentSize().background(
-                    androidx.compose.ui.graphics.Brush.linearGradient(listOf(Color(0xFF2A3360), PanelHi))
+                    androidx.compose.ui.graphics.Brush.linearGradient(listOf(VimmNavy, PanelHi))
                 ).padding(10.dp),
                 contentAlignment = Alignment.Center,
             ) {
@@ -77,7 +82,7 @@ fun CoverArt(id: Int, title: String?, modifier: Modifier = Modifier) {
             }
             return@Box
         }
-        val model = if (stage == 0) Vimm.boxArt(id) else Vimm.screenshot(id)
+        val model = sources[stage]
         AsyncImage(
             model = model, contentDescription = null, contentScale = ContentScale.Crop,
             modifier = Modifier.matchParentSize().blur(18.dp).alpha(0.55f),
@@ -100,7 +105,7 @@ fun GameCard(game: Game, showSystem: Boolean, onClick: () -> Unit) {
             .clickable(onClick = onClick)
             .padding(bottom = 4.dp)
     ) {
-        CoverArt(game.id, game.title, Modifier.fillMaxWidth().aspectRatio(0.75f).clip(RoundedCornerShape(14.dp)))
+        CoverArt(game.id, game.title, Modifier.fillMaxWidth().aspectRatio(0.75f).clip(RoundedCornerShape(14.dp)), game.system, game.regions)
         Spacer(Modifier.height(6.dp))
         Text(
             game.title, style = MaterialTheme.typography.bodySmall, fontWeight = FontWeight.SemiBold,
@@ -136,8 +141,12 @@ fun GameGrid(
         modifier = Modifier.fillMaxSize(),
     ) {
         if (header != null) item(span = { androidx.compose.foundation.lazy.grid.GridItemSpan(maxLineSpan) }) { header() }
-        items(games, key = { it.id }) { g ->
-            Box(Modifier.animateItem(fadeInSpec = tween(250), placementSpec = spring(stiffness = Spring.StiffnessMediumLow))) {
+        itemsIndexed(games, key = { _, g -> g.id }) { i, g ->
+            Box(
+                Modifier.animateItem(fadeInSpec = tween(250), placementSpec = spring(stiffness = Spring.StiffnessMediumLow))
+                    .staggerIn(i)
+                    .then(if (i == 0) Modifier.initialFocus() else Modifier)
+            ) {
                 GameCard(g, showSystem) { onGame(g) }
             }
         }

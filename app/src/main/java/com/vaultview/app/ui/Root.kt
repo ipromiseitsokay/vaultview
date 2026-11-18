@@ -105,6 +105,7 @@ fun VaultRoot() {
                             icon = { TabIcon(t, activeDownloads) },
                             label = { Text(t.label, maxLines = 1, fontWeight = FontWeight.Bold) },
                             colors = vimmRailColors(),
+                            modifier = Modifier.focusRing(RoundedCornerShape(18.dp), 1.06f),
                         )
                     }
                     Spacer(Modifier.weight(1f))
