@@ -112,7 +112,7 @@ object Vimm {
     }
 
     /** Top-rated games shown on a system's landing page. */
-    suspend fun topGames(code: String): List<Game> = cached("top:$code") {
+    suspend fun topGames(code: String): List<Game> = Catalog.system(code)?.top?.takeIf { it.isNotEmpty() }?.also { memo["top:$code"] = it } ?: cached("top:$code") {
         parseTop(get("$BASE/vault/$code"), Systems.byCode(code)?.name)
     }
 
@@ -123,7 +123,12 @@ object Vimm {
         }
 
     /** One letter of a system's library. [section] is "A".."Z" or "#". */
-    suspend fun section(code: String, section: String): List<Game> = cached("sec:$code:$section") {
+    suspend fun section(code: String, section: String): List<Game> = Catalog.system(code)?.games?.let { all ->
+        all.filter { g ->
+            val c = g.title.firstOrNull()?.uppercaseChar() ?: '#'
+            if (section == "#") c !in 'A'..'Z' else c == section.first()
+        }
+    } ?: cached("sec:$code:$section") {
         val url = if (section == "#") {
             "$BASE/vault/".toHttpUrl().newBuilder()
                 .addQueryParameter("p", "list").addQueryParameter("system", code)
@@ -132,7 +137,7 @@ object Vimm {
         parseRows(get(url), Systems.byCode(code)?.name)
     }
 
-    suspend fun search(query: String, code: String? = null): List<Game> = cached("q:$code:${query.lowercase()}") {
+    suspend fun search(query: String, code: String? = null): List<Game> = Catalog.search(query, code) ?: cached("q:$code:${query.lowercase()}") {
         val url = "$BASE/vault/".toHttpUrl().newBuilder().apply {
             addQueryParameter("p", "list")
             if (code != null) addQueryParameter("system", code)
@@ -191,7 +196,12 @@ object Vimm {
      * Every game for a system: all letter pages, loaded a few at a time.
      * Calls [onPartial] as pages arrive so the screen can fill in progressively.
      */
-    suspend fun allGames(code: String, onPartial: (List<Game>, Int) -> Unit): List<Game> = kotlinx.coroutines.coroutineScope {
+    suspend fun allGames(code: String, onPartial: (List<Game>, Int) -> Unit): List<Game> =
+        // Never bulk-load from vimm.net on the device (it rate-limits and everything stalls).
+        // Without the catalog, show the Top 10; letters still load one page at a time.
+        Catalog.system(code)?.games?.also { incomplete = false } ?: topGames(code).also { incomplete = true }
+
+    private suspend fun allGamesOnline(code: String, onPartial: (List<Game>, Int) -> Unit): List<Game> = kotlinx.coroutines.coroutineScope {
         val done = java.util.concurrent.atomic.AtomicInteger(0)
         val failed = java.util.concurrent.atomic.AtomicInteger(0)
         val results = java.util.concurrent.ConcurrentHashMap<String, List<Game>>()
@@ -237,7 +247,8 @@ object Vimm {
             if (result is Document) return@withPermit result
             attempt++
             if (attempt > 4) throw IOException("vimm.net is busy right now. Try again in a minute.")
-            val pause = (result as Long).takeIf { it > 0 } ?: (1500L shl (attempt - 1)) // 1.5s, 3s, 6s, 12s
+            // Capped so one "busy" reply can't freeze every screen for a minute.
+            val pause = ((result as Long).takeIf { it > 0 } ?: (1500L shl (attempt - 1))).coerceAtMost(8000L)
             spacing.withLock { nextSlot = maxOf(nextSlot, System.currentTimeMillis() + pause) }
         }
         @Suppress("UNREACHABLE_CODE") throw IllegalStateException()

@@ -139,8 +139,10 @@ fun GameGrid(
     onGame: (Game) -> Unit,
     showSystem: Boolean = false,
     header: (@Composable () -> Unit)? = null,
+    state: androidx.compose.foundation.lazy.grid.LazyGridState = androidx.compose.foundation.lazy.grid.rememberLazyGridState(),
 ) {
     LazyVerticalGrid(
+        state = state,
         columns = GridCells.Adaptive(if (LocalWide.current) 120.dp else 108.dp),
         contentPadding = PaddingValues(16.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),

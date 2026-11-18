@@ -13,6 +13,7 @@ class VaultApplication : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
         Vimm.init(this)
+        com.vaultview.app.data.Catalog.init(this, kotlinx.coroutines.MainScope())
         Favorites.init(this)
         Settings.init(this)
         Downloads.init(this)
@@ -27,6 +28,6 @@ class VaultApplication : Application(), ImageLoaderFactory {
         .crossfade(180)
         .respectCacheHeaders(false)
         .memoryCache { coil.memory.MemoryCache.Builder(this).maxSizePercent(0.30).build() }
-        .diskCache { DiskCache.Builder().directory(cacheDir.resolve("art")).maxSizeBytes(400L * 1024 * 1024).build() }
+        .diskCache { DiskCache.Builder().directory(cacheDir.resolve("art")).maxSizeBytes(1536L * 1024 * 1024).build() }
         .build()
 }

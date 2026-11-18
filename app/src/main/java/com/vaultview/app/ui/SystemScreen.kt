@@ -70,8 +70,13 @@ fun SystemScreen(code: String, onBack: () -> Unit, onGame: (Game) -> Unit) {
     val raw = (state as? Load.Ok)?.value.orEmpty()
     // vimm's own Top 10 for the system leads the "Top rated" order.
     val topIds by produceState(emptyList<Int>(), code) { value = runCatching { Vimm.topGames(code).map { it.id } }.getOrDefault(emptyList()) }
-    val games = remember(raw, byRating, topIds) { if (byRating) rankTopRated(raw, topIds) else raw.sortedBy { it.title.lowercase() } }
-    LaunchedEffect(games.take(40).map { it.id }) { prefetchArt(context, games) }
+    // Sort off the main thread; big systems have thousands of games.
+    val games by produceState(raw, raw, byRating, topIds) {
+        value = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.Default) {
+            if (byRating) rankTopRated(raw, topIds) else raw.sortedBy { it.title.lowercase() }
+        }
+    }
+    LaunchedEffect(games.take(30).map { it.id }) { prefetchArt(context, games, 30) }
     val regions = games.flatMap { it.regions }.groupingBy { it }.eachCount()
         .entries.sortedByDescending { it.value }.take(10).map { it.key }
 
@@ -84,7 +89,15 @@ fun SystemScreen(code: String, onBack: () -> Unit, onGame: (Game) -> Unit) {
         )
     }
 
+    val grid = androidx.compose.foundation.lazy.grid.rememberLazyGridState()
+    val headerShown = rememberHeaderVisible(grid)
     Column(Modifier.fillMaxSize()) {
+      androidx.compose.animation.AnimatedVisibility(
+        visible = headerShown,
+        enter = androidx.compose.animation.expandVertically(androidx.compose.animation.core.tween(220)) + androidx.compose.animation.fadeIn(),
+        exit = androidx.compose.animation.shrinkVertically(androidx.compose.animation.core.tween(220)) + androidx.compose.animation.fadeOut(),
+      ) {
+      Column {
         Box(
             Modifier.fillMaxWidth()
                 .background(Brush.verticalGradient(listOf(sys.brand.color.copy(alpha = 0.45f), Color.Transparent)))
@@ -140,18 +153,37 @@ fun SystemScreen(code: String, onBack: () -> Unit, onGame: (Game) -> Unit) {
                     color = Muted, style = MaterialTheme.typography.labelLarge,
                 )
                 if (!loadingAll && section == ALL && submitted.isBlank() && Vimm.incomplete) {
-                    TextButton(onClick = { retry++ }) { Text("Some letters didn't load · Retry") }
+                    Text("  ·  Top 10 only — pick a letter for the rest", color = Muted, style = MaterialTheme.typography.labelLarge)
                 }
                 Spacer(Modifier.weight(1f))
+                if (section == ALL && submitted.isBlank()) {
+                    val p = com.vaultview.app.data.ArtSaver.progress[code]
+                    val saved = remember(p) { com.vaultview.app.data.ArtSaver.isSaved(context, code) }
+                    TextButton(
+                        onClick = { com.vaultview.app.data.ArtSaver.save(context, code, raw) },
+                        enabled = p == null && raw.isNotEmpty(),
+                        modifier = Modifier.focusRing(RoundedCornerShape(50), 1.04f),
+                    ) {
+                        Text(when {
+                            p != null -> "Saving art ${(p * 100).toInt()}%"
+                            saved -> "Art saved ✓"
+                            else -> "Save art offline"
+                        })
+                    }
+                    Spacer(Modifier.width(8.dp))
+                }
                 SortToggle(byRating) { byRating = it }
             }
         }
+      }
+      }
+
         when (val s = state) {
             Load.Loading -> SkeletonGrid()
             is Load.Err -> CenterMessage(s.message, "Try again") { retry++ }
             is Load.Ok -> {
                 val shown = if (region == null) games else games.filter { region in it.regions }
-                if (shown.isEmpty()) CenterMessage("No games here") else GameGrid(shown, onGame)
+                if (shown.isEmpty()) CenterMessage("No games here") else GameGrid(shown, onGame, state = grid)
             }
         }
     }

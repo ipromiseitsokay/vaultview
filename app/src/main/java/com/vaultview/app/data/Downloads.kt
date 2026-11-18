@@ -40,6 +40,8 @@ class DownloadItem(
     var savedTo by mutableStateOf<String?>(null)
     var files by mutableStateOf<List<String>>(emptyList())
     var finishedAt by mutableLongStateOf(0L)
+    /** Bytes per second, smoothed. */
+    var speed by mutableLongStateOf(0L)
     @Volatile var cancelRequested = false
 
     val system get() = Systems.find(systemCode)
@@ -69,6 +71,14 @@ object Downloads {
 
     fun enqueue(context: Context, gameId: Int, title: String, systemCode: String?, request: DownloadRequest) {
         items.add(0, DownloadItem(System.currentTimeMillis(), gameId, title, systemCode, request))
+        ContextCompat.startForegroundService(context, Intent(context, DownloadService::class.java))
+    }
+
+    /** Tries a failed or cancelled download again (only possible in the session it started in). */
+    fun retry(context: Context, item: DownloadItem) {
+        if (item.request == null || item.active) return
+        item.cancelRequested = false; item.message = null; item.progress = 0f; item.bytes = 0; item.speed = 0
+        item.state = DownloadState.QUEUED
         ContextCompat.startForegroundService(context, Intent(context, DownloadService::class.java))
     }
 

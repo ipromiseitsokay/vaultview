@@ -7,3 +7,4 @@ release.keystore
 *.jks
 keystore.properties
 .kotlin/
+app/src/main/assets/catalog.json.gz

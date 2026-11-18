@@ -74,6 +74,13 @@ fun VaultRoot() {
     var selected by remember { mutableStateOf<Game?>(null) }
     var owned by remember { mutableStateOf<com.vaultview.app.data.LibraryGame?>(null) }
     var rolling by remember { mutableStateOf(false) }
+    // Start: bring up the game you played last, with Play ready.
+    LaunchedEffect(com.vaultview.app.Controls.startPresses) {
+        if (com.vaultview.app.Controls.startPresses == 0) return@LaunchedEffect
+        com.vaultview.app.data.Library.games
+            .mapNotNull { g -> com.vaultview.app.data.Playtime.of(g)?.let { g to it.lastPlayed } }
+            .maxByOrNull { it.second }?.first?.let { owned = it }
+    }
     val onGame: (Game) -> Unit = { Sfx.tap(Sfx.Cue.SELECT); selected = it }
     val config = LocalConfiguration.current
     val wide = config.screenWidthDp > config.screenHeightDp
@@ -85,7 +92,8 @@ fun VaultRoot() {
         if (com.vaultview.app.data.Library.needsRescan()) com.vaultview.app.data.Library.scan(appContext)
     }
 
-    val activeDownloads = Downloads.items.count { it.active }
+    // Only changes when a download starts or ends, not on every progress tick, so the menu doesn't redraw constantly.
+    val activeDownloads by remember { derivedStateOf { Downloads.items.count { it.active } } }
     fun isActive(t: Tab) = route?.substringBefore('/')?.substringBefore('?') == t.route ||
         (t.route == "home" && (route?.startsWith("system/") == true || route?.startsWith("game/") == true || route == "search"))
     fun go(t: Tab) = nav.navigate(t.route) {
@@ -204,7 +212,7 @@ private fun Host(nav: NavHostController, onGame: (Game) -> Unit, onOwned: (com.v
         composable("search") { SearchScreen(onGame, onBack = { nav.popBackStack() }) }
         composable("library") { LibraryScreen(onOpen = { Sfx.tap(Sfx.Cue.SELECT); onOwned(it) }) }
         composable("saved") { SavedScreen(onGame) }
-        composable("downloads") { DownloadsScreen(onGame) }
+        composable("downloads") { DownloadsScreen(onGame, onOwned = { Sfx.tap(Sfx.Cue.SELECT); onOwned(it) }) }
         composable("settings") { SettingsScreen() }
         composable("game/{id}?title={title}&system={system}") { e ->
             GameScreen(

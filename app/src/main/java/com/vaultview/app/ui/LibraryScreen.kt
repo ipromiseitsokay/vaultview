@@ -82,7 +82,15 @@ fun LibraryScreen(onOpen: (LibraryGame) -> Unit) {
         sections.map { (name, list) -> (name to i).also { i += 1 + list.size } }
     }
 
+    val headerShown = rememberHeaderVisible(grid)
+    var stats by remember { mutableStateOf(false) }
+    if (stats) StatsSheet(onDismiss = { stats = false })
     Column(Modifier.fillMaxSize()) {
+        androidx.compose.animation.AnimatedVisibility(
+            visible = headerShown || Settings.folderUri == null,
+            enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut(),
+        ) {
         Row(Modifier.padding(start = 16.dp, end = 12.dp, top = 12.dp), verticalAlignment = Alignment.CenterVertically) {
             Column(Modifier.weight(1f)) {
                 Text("Library", style = if (wide) MaterialTheme.typography.headlineMedium else MaterialTheme.typography.headlineLarge,
@@ -99,10 +107,15 @@ fun LibraryScreen(onOpen: (LibraryGame) -> Unit) {
                     color = Muted, style = MaterialTheme.typography.bodySmall,
                 )
             }
+            if (Playtime.records.isNotEmpty()) {
+                FilledTonalButton(onClick = { stats = true }, modifier = Modifier.focusRing(RoundedCornerShape(50))) { Text("📊  Stats") }
+                Spacer(Modifier.width(6.dp))
+            }
             if (Library.scanning) CircularProgressIndicator(Modifier.size(22.dp), strokeWidth = 2.dp)
             else if (Settings.folderUri != null) IconButton(
                 onClick = { scope.launch { Library.scan(context) } }, modifier = Modifier.focusRing(CircleShape),
             ) { Icon(Icons.Filled.Refresh, "Rescan folder") }
+        }
         }
 
         if (Settings.folderUri == null) {
@@ -118,6 +131,11 @@ fun LibraryScreen(onOpen: (LibraryGame) -> Unit) {
         }
 
         // Grouping and quick-jump chips.
+        androidx.compose.animation.AnimatedVisibility(
+            visible = headerShown,
+            enter = androidx.compose.animation.expandVertically() + androidx.compose.animation.fadeIn(),
+            exit = androidx.compose.animation.shrinkVertically() + androidx.compose.animation.fadeOut(),
+        ) {
         LazyRow(
             contentPadding = PaddingValues(horizontal = 16.dp, vertical = 8.dp),
             horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -139,6 +157,7 @@ fun LibraryScreen(onOpen: (LibraryGame) -> Unit) {
                     )
                 }
             }
+        }
         }
 
         when {

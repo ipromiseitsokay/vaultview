@@ -21,6 +21,8 @@ import kotlin.math.abs
 /** Whether the person is driving the app with buttons (true) or touch (false). */
 object Controls {
     var usingController by mutableStateOf(false)
+    /** Counts presses of Start; the app opens your last game when it changes. */
+    var startPresses by mutableStateOf(0)
 }
 
 class MainActivity : ComponentActivity() {
@@ -54,6 +56,10 @@ class MainActivity : ComponentActivity() {
         val code = event.keyCode
         if (event.action == KeyEvent.ACTION_DOWN && code != KeyEvent.KEYCODE_VOLUME_UP && code != KeyEvent.KEYCODE_VOLUME_DOWN) {
             Controls.usingController = true
+        }
+        if (code == KeyEvent.KEYCODE_BUTTON_START) {
+            if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) { Controls.startPresses++; Sfx.key(Sfx.Cue.SELECT) }
+            return true
         }
         if (dirIndex(code) >= 0) {
             if (event.action == KeyEvent.ACTION_DOWN) {

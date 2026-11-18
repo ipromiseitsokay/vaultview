@@ -34,7 +34,10 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            // R8 makes Compose noticeably smoother; rules for the bits that need keeping are in proguard-rules.pro.
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = if (keystoreFile.exists()) signingConfigs.getByName("release") else signingConfigs.getByName("debug")
         }
     }

@@ -180,3 +180,26 @@ fun Modifier.bleed(amount: Dp): Modifier = this.layout { measurable, constraints
     val placeable = measurable.measure(wide)
     layout(placeable.width - 2 * px, placeable.height) { placeable.place(-px, 0) }
 }
+
+/**
+ * Header that tucks away while scrolling down and returns when scrolling back up (or at the top).
+ * Follows the grid's position, so it works for touch, D-pad and stick alike.
+ */
+@androidx.compose.runtime.Composable
+fun rememberHeaderVisible(state: androidx.compose.foundation.lazy.grid.LazyGridState): Boolean {
+    var visible by remember { mutableStateOf(true) }
+    LaunchedEffect(state) {
+        var anchor = 0L
+        androidx.compose.runtime.snapshotFlow { state.firstVisibleItemIndex.toLong() * 100_000 + state.firstVisibleItemScrollOffset }
+            .collect { pos ->
+                // While shown, remember the highest point reached and hide after moving 80px down from it;
+                // while hidden, remember the lowest point and show again after moving 80px back up.
+                when {
+                    state.firstVisibleItemIndex == 0 && state.firstVisibleItemScrollOffset < 60 -> { visible = true; anchor = pos }
+                    visible -> if (pos > anchor + 80) { visible = false; anchor = pos } else anchor = minOf(anchor, pos)
+                    else -> if (pos < anchor - 80) { visible = true; anchor = pos } else anchor = maxOf(anchor, pos)
+                }
+            }
+    }
+    return visible
+}

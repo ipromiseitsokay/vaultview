@@ -48,6 +48,7 @@ fun HomeScreen(onSystem: (String) -> Unit, onGame: (Game) -> Unit, onSearch: () 
     val playing = com.vaultview.app.data.Library.games
         .mapNotNull { g -> com.vaultview.app.data.Playtime.of(g)?.let { g to it } }
         .sortedByDescending { it.second.lastPlayed }.take(12).map { it.first }
+    val gotd = remember(com.vaultview.app.data.Catalog.built) { gameOfTheDay() }
     var brandName by rememberSaveable { mutableStateOf<String?>(null) }
     val brand = brandName?.let { Brand.valueOf(it) }
     val shown = Systems.all.filter { brand == null || it.brand == brand }
@@ -106,8 +107,11 @@ fun HomeScreen(onSystem: (String) -> Unit, onGame: (Game) -> Unit, onSearch: () 
                 }
             }
         }
+        if (gotd != null) {
+            item(span = full, key = "gotd") { Box(Modifier.padding(top = 4.dp)) { GameOfTheDayCard(gotd) { onGame(gotd) } } }
+        }
         if (playing.isNotEmpty()) {
-            item(span = full) { SectionLabel("Continue playing") }
+            item(span = full) { SectionLabel("Continue playing  ·  press Start to jump back in") }
             item(span = full) {
                 LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(14.dp),

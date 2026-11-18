@@ -35,6 +35,7 @@ import java.util.concurrent.TimeUnit
 /** Runs queued downloads one at a time in the foreground, then saves or unpacks them. */
 class DownloadService : Service() {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+    private var lastNotify = 0L
     private var worker: Job? = null
     private lateinit var wakeLock: PowerManager.WakeLock
     private val client = OkHttpClient.Builder()
@@ -138,6 +139,7 @@ class DownloadService : Service() {
                         val buf = ByteArray(1 shl 16)
                         var done = 0L
                         var lastUi = 0L
+                        var lastBytes = 0L
                         while (true) {
                             if (item.cancelRequested) throw InterruptedException()
                             val n = input.read(buf)
@@ -145,11 +147,14 @@ class DownloadService : Service() {
                             o.write(buf, 0, n)
                             done += n
                             val now = System.currentTimeMillis()
-                            if (now - lastUi > 400) {
+                            if (now - lastUi > 500) {
+                                val rate = if (lastUi > 0) (done - lastBytes) * 1000 / (now - lastUi) else 0L
+                                lastBytes = done
                                 lastUi = now
+                                set { item.speed = if (item.speed == 0L) rate else (item.speed * 7 + rate * 3) / 10 }
                                 val p = if (total > 0) done.toFloat() / total else 0f
                                 set { item.bytes = done; item.progress = p }
-                                notify("${item.title}", p.takeIf { total > 0 })
+                                if (now - lastNotify > 1500) { lastNotify = now; notify(item.title, p.takeIf { total > 0 }) }
                             }
                         }
                         set { item.bytes = done }
@@ -163,7 +168,7 @@ class DownloadService : Service() {
                     val files = Extractor.extract(temp!!, { path -> dir.createPath(path) },
                         onProgress = { p ->
                             val now = System.currentTimeMillis()
-                            if (now - lastUi > 400) { lastUi = now; scope.launch(Dispatchers.Main) { item.progress = p } }
+                            if (now - lastUi > 500) { lastUi = now; scope.launch(Dispatchers.Main) { item.progress = p } }
                         },
                         isCancelled = { item.cancelRequested })
                     set { item.message = "${files.size} file${if (files.size == 1) "" else "s"} unpacked"; item.files = files }
@@ -237,7 +242,7 @@ class DownloadService : Service() {
 
     private fun notification(text: String, progress: Float?): Notification =
         NotificationCompat.Builder(this, CHANNEL)
-            .setSmallIcon(android.R.drawable.stat_sys_download)
+            .setSmallIcon(com.vaultview.app.R.drawable.ic_stat_download)
             .setContentTitle("Downloading")
             .setContentText(text)
             .setOngoing(true)
