@@ -183,6 +183,7 @@ fun GameScreen(id: Int, title: String, system: String?, onBack: () -> Unit, onSh
         when {
             p is Phase.Ready -> {
                 phase = p
+                com.vaultview.app.data.Frontends.rememberFacts(context, id, p.info.facts)
                 showPage = false
                 checkWaiting = false
                 version = version ?: p.info.fields.firstOrNull { it.first == "mediaId" }?.second

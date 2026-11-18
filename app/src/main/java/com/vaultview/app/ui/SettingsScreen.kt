@@ -34,6 +34,10 @@ fun SettingsScreen() {
     val pickFolder = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
         if (uri != null) Settings.setFolder(context, uri)
     }
+    val pickEsde = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocumentTree()) { uri ->
+        if (uri != null) { Settings.setEsdeFolder(context, uri); Settings.updateFrontendExport(true) }
+    }
+    val exportScope = rememberCoroutineScope()
 
     Column(
         Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp).widthIn(max = 720.dp),
@@ -58,6 +62,35 @@ fun SettingsScreen() {
             }
         }
 
+        Section("Frontends") {
+            Text("Hand your games to ES-DE and iiSU with box art, screenshots and details, so they show up looking right without scraping.",
+                color = Muted, style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(10.dp))
+            Text("ES-DE folder", fontWeight = FontWeight.SemiBold)
+            Text(com.vaultview.app.data.Frontends.folderLabel() ?: "Not chosen yet · usually Internal storage/ES-DE",
+                color = Muted, style = MaterialTheme.typography.bodySmall)
+            Spacer(Modifier.height(8.dp))
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
+                ToolButton(if (Settings.esdeUri == null) "Choose ES-DE folder" else "Change folder", { pickEsde.launch(null) }, icon = BrowseIcon)
+                if (Settings.esdeUri != null) {
+                    val busy = com.vaultview.app.data.Frontends.busy
+                    ToolButton(busy?.let { "Exporting ${(it * 100).toInt()}%" } ?: "Export my library",
+                        { exportScope.launch { com.vaultview.app.data.Frontends.exportLibrary(context) } },
+                        icon = SyncIcon, enabled = busy == null)
+                }
+            }
+            com.vaultview.app.data.Frontends.lastResult?.let {
+                Text(it, color = Color(0xFF7BD88F), style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 6.dp))
+            }
+            if (Settings.esdeUri != null) {
+                Spacer(Modifier.height(8.dp))
+                Toggle("Add new downloads automatically", "Writes each game's entry and art as soon as it finishes", Settings.frontendExport) {
+                    Settings.updateFrontendExport(it)
+                }
+            }
+            Text("In iiSU: Settings › ROM Import › link ES-DE metadata, and point it at the same ROMs folder. Needs “Sort into system folders” on.",
+                color = Muted, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+        }
         Section("Second screen") {
             val context = androidx.compose.ui.platform.LocalContext.current
             val found = remember { DeckController.secondDisplay(context) != null }

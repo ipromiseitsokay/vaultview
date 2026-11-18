@@ -64,7 +64,7 @@ object Library {
         "j64" to "Jaguar", "jag" to "Jaguar", "vb" to "VB", "gdi" to "Dreamcast", "cdi" to "Dreamcast",
         "cso" to "PSP", "pbp" to "PSP", "wbfs" to "Wii", "wua" to "WiiU", "wux" to "WiiU", "rvz" to "GameCube", "gcm" to "GameCube",
     )
-    private val ignored = setOf(
+    internal val ignored = setOf(
         "txt", "nfo", "jpg", "jpeg", "png", "gif", "webp", "xml", "dat", "sav", "srm", "sta", "cfg", "ini", "db", "log",
         "pdf", "md5", "sfv", "sha1", "url", "html", "htm", "json", "mp4", "mkv", "mp3", "ogg", "wav", "zip.part", "tmp",
     )

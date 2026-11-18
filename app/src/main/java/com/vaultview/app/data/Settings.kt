@@ -19,6 +19,10 @@ object Settings {
     var soundVolume by mutableStateOf(0.6f); private set
     /** Use a second screen (AYN Thor's bottom screen) for buttons and downloads. */
     var secondScreen by mutableStateOf(true); private set
+    /** Write ES-DE gamelists and art for new downloads (read by ES-DE and iiSU). */
+    var frontendExport by mutableStateOf(false); private set
+    /** SAF tree URI of the ES-DE folder. */
+    var esdeUri by mutableStateOf<String?>(null); private set
 
     fun init(context: Context) {
         prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
@@ -28,6 +32,8 @@ object Settings {
         soundTheme = prefs.getString("soundTheme", "crisp") ?: "crisp"
         soundVolume = prefs.getFloat("soundVolume", 0.6f)
         secondScreen = prefs.getBoolean("secondScreen", true)
+        frontendExport = prefs.getBoolean("frontendExport", false)
+        esdeUri = prefs.getString("esde", null)
     }
 
     fun setFolder(context: Context, uri: Uri) {
@@ -40,6 +46,13 @@ object Settings {
     fun updateAutoExtract(v: Boolean) { autoExtract = v; prefs.edit().putBoolean("autoExtract", v).apply() }
     fun updateSoundTheme(v: String) { soundTheme = v; prefs.edit().putString("soundTheme", v).apply() }
     fun updateSoundVolume(v: Float) { soundVolume = v; prefs.edit().putFloat("soundVolume", v).apply() }
+    fun updateFrontendExport(v: Boolean) { frontendExport = v; prefs.edit().putBoolean("frontendExport", v).apply() }
+    fun setEsdeFolder(context: Context, uri: Uri) {
+        val flags = android.content.Intent.FLAG_GRANT_READ_URI_PERMISSION or android.content.Intent.FLAG_GRANT_WRITE_URI_PERMISSION
+        context.contentResolver.takePersistableUriPermission(uri, flags)
+        esdeUri = uri.toString()
+        prefs.edit().putString("esde", esdeUri).apply()
+    }
     fun updateSecondScreen(v: Boolean) { secondScreen = v; prefs.edit().putBoolean("secondScreen", v).apply() }
     fun updateSystemFolders(v: Boolean) { systemFolders = v; prefs.edit().putBoolean("systemFolders", v).apply() }
 

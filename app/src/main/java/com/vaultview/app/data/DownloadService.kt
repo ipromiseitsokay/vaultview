@@ -182,6 +182,8 @@ class DownloadService : Service() {
                     item.savedTo = listOfNotNull(Settings.folderLabel(), if (dir !== root) item.system?.folder else null).joinToString("/")
                     Downloads.persist()
                 }
+                // Frontends (ES-DE, iiSU): add this game's entry and art.
+                runCatching { Frontends.exportDownload(this@DownloadService, item) }
             }
         } catch (e: InterruptedException) {
             partial?.delete()
