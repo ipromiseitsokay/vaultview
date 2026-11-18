@@ -62,13 +62,35 @@ fun Modifier.focusRing(shape: Shape, lift: Float = 1.05f): Modifier = composed {
             if (t > 0.01f) {
                 val outline = shape.createOutline(size, layoutDirection, this)
                 // Glow behind the element, then the element, then a crisp ring on top.
-                drawOutline(outline, FocusGlow.copy(alpha = 0.10f * t), style = Stroke(14.dp.toPx() * t))
-                drawOutline(outline, FocusGlow.copy(alpha = 0.22f * t), style = Stroke(7.dp.toPx() * t))
+                drawOutline(outline, FocusGlow.copy(alpha = 0.05f * t), style = Stroke(12.dp.toPx() * t))
+                drawOutline(outline, FocusGlow.copy(alpha = 0.12f * t), style = Stroke(6.dp.toPx() * t))
             }
             drawContent()
             if (t > 0.01f) {
                 val outline = shape.createOutline(size, layoutDirection, this)
-                drawOutline(outline, FocusColor.copy(alpha = t.coerceIn(0f, 1f)), style = Stroke(3.dp.toPx()))
+                drawOutline(outline, FocusColor.copy(alpha = 0.9f * t.coerceIn(0f, 1f)), style = Stroke(2.dp.toPx()))
+            }
+        }
+}
+
+/**
+ * Gentle version for menu tabs: no outline, just a soft halo, so it sits nicely with the
+ * tab's own highlighted pill instead of boxing it in.
+ */
+fun Modifier.focusGlow(): Modifier = composed {
+    var focused by remember { mutableStateOf(false) }
+    val t by animateFloatAsState(if (focused) 1f else 0f, tween(220), label = "glow")
+    this
+        .onFocusChanged { focused = it.hasFocus || it.isFocused }
+        .drawBehind {
+            if (t > 0.01f) {
+                drawCircle(
+                    Brush.radialGradient(
+                        listOf(FocusGlow.copy(alpha = 0.16f * t), Color.Transparent),
+                        center = center, radius = size.minDimension * 0.75f,
+                    ),
+                    radius = size.minDimension * 0.75f,
+                )
             }
         }
 }
@@ -110,6 +132,15 @@ fun Modifier.shimmer(): Modifier = composed {
             )
         )
     }
+}
+
+/** Material "video library" glyph (stacked cases with a play mark). */
+val LibraryIcon: ImageVector by lazy {
+    ImageVector.Builder("Library", 24.dp, 24.dp, 24f, 24f)
+        .addPath(PathParser().parsePathString(
+            "M4,6H2v14c0,1.1 0.9,2 2,2h14v-2H4V6zM20,2H8C6.9,2 6,2.9 6,4v12c0,1.1 0.9,2 2,2h12c1.1,0 2,-0.9 2,-2V4C22,2.9 21.1,2 20,2zM12,14.5v-9l6,4.5L12,14.5z"
+        ).toNodes(), fill = SolidColor(Color.Black))
+        .build()
 }
 
 /** Material "download" glyph (arrow into a tray); the core icon set doesn't include it. */

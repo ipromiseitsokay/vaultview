@@ -38,6 +38,7 @@ class DownloadItem(
     var message by mutableStateOf<String?>(null)
     var fileName by mutableStateOf<String?>(null)
     var savedTo by mutableStateOf<String?>(null)
+    var files by mutableStateOf<List<String>>(emptyList())
     var finishedAt by mutableLongStateOf(0L)
     @Volatile var cancelRequested = false
 
@@ -60,6 +61,7 @@ object Downloads {
                 state = DownloadState.DONE; progress = 1f
                 fileName = o.optString("file").ifBlank { null }
                 savedTo = o.optString("savedTo").ifBlank { null }
+                files = o.optJSONArray("files")?.let { a -> List(a.length()) { a.getString(it) } } ?: emptyList()
                 finishedAt = o.optLong("at")
             }
         }
@@ -98,6 +100,7 @@ object Downloads {
                 put("key", d.key); put("gameId", d.gameId); put("title", d.title)
                 put("system", d.systemCode ?: ""); put("file", d.fileName ?: "")
                 put("savedTo", d.savedTo ?: ""); put("at", d.finishedAt)
+                put("files", JSONArray(d.files))
             })
         }
         prefs.edit().putString("done", arr.toString()).apply()

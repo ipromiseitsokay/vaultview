@@ -166,7 +166,7 @@ class DownloadService : Service() {
                             if (now - lastUi > 400) { lastUi = now; scope.launch(Dispatchers.Main) { item.progress = p } }
                         },
                         isCancelled = { item.cancelRequested })
-                    set { item.message = "${files.size} file${if (files.size == 1) "" else "s"} unpacked" }
+                    set { item.message = "${files.size} file${if (files.size == 1) "" else "s"} unpacked"; item.files = files }
                 }
 
                 set {

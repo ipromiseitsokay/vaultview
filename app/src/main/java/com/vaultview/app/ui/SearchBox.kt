@@ -39,9 +39,11 @@ fun SearchBox(
     onSubmit: () -> Unit,
     onClear: () -> Unit,
     modifier: Modifier = Modifier,
+    autoFocus: Boolean = false,
 ) {
     var editing by remember { mutableStateOf(false) }
     var hadFocus by remember { mutableStateOf(false) }
+    var focusedAt by remember { mutableStateOf(0L) }
     val field = remember { FocusRequester() }
     val keyboard = LocalSoftwareKeyboardController.current
     val shape = RoundedCornerShape(28.dp)
@@ -55,10 +57,15 @@ fun SearchBox(
         if (!isEditing) {
             Row(
                 Modifier.fillMaxWidth().heightIn(min = 52.dp)
+                    .then(if (autoFocus) Modifier.initialFocus() else Modifier)
+                    .onFocusChanged { if (it.isFocused) focusedAt = android.os.SystemClock.uptimeMillis() }
                     .focusRing(shape, 1.02f)
                     .clip(shape)
                     .border(1.dp, MaterialTheme.colorScheme.outline, shape)
-                    .clickable { hadFocus = false; editing = true }
+                    .clickable {
+                        // Only a deliberate press opens typing, not one that arrives as the highlight lands here.
+                        if (android.os.SystemClock.uptimeMillis() - focusedAt > 450) { hadFocus = false; editing = true }
+                    }
                     .padding(horizontal = 16.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {

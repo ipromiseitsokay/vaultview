@@ -59,10 +59,14 @@ fun flag(region: String) = regionFlags[region] ?: region.take(3).uppercase()
  * If vimm.net has none, tries the libretro thumbnail archive, then the screenshot, then a title card.
  */
 @Composable
-fun CoverArt(id: Int, title: String?, modifier: Modifier = Modifier, system: String? = null, regions: List<String> = emptyList()) {
-    val sources = remember(id, system, regions) {
-        listOf(Vimm.boxArt(id)) + Vimm.libretroBoxArt(system, title, regions) + Vimm.screenshot(id)
-    }
+fun CoverArt(
+    id: Int?, title: String?, modifier: Modifier = Modifier, system: String? = null, regions: List<String> = emptyList(),
+    exactName: String? = null,
+) {
+    val sources = remember(id, system, regions, exactName) {
+        listOfNotNull(id?.let { Vimm.boxArt(it) }, exactName?.let { Vimm.libretroExact(system, it) }) +
+            Vimm.libretroBoxArt(system, title, regions) + listOfNotNull(id?.let { Vimm.screenshot(it) })
+    }.distinct()
     var stage by remember(id) { mutableIntStateOf(0) }
     var loaded by remember(id) { mutableStateOf(false) }
     Box(modifier.then(if (loaded) Modifier.background(PanelHi) else Modifier.shimmer())) {

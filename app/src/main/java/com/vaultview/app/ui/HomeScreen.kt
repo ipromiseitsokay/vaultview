@@ -18,6 +18,8 @@ import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -40,7 +42,7 @@ import com.vaultview.app.data.Systems
 import com.vaultview.app.data.Vimm
 
 @Composable
-fun HomeScreen(onSystem: (String) -> Unit, onGame: (Game) -> Unit) {
+fun HomeScreen(onSystem: (String) -> Unit, onGame: (Game) -> Unit, onSearch: () -> Unit) {
     val wide = LocalWide.current
     val library = com.vaultview.app.data.Downloads.library().take(20)
     var brandName by rememberSaveable { mutableStateOf<String?>(null) }
@@ -69,17 +71,29 @@ fun HomeScreen(onSystem: (String) -> Unit, onGame: (Game) -> Unit) {
         modifier = Modifier.fillMaxSize(),
     ) {
         item(span = full) {
-            if (wide) {
-                Row(verticalAlignment = Alignment.Bottom) {
-                    Text("The Vault", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
-                    Spacer(Modifier.width(12.dp))
-                    Text("Pick a maker, then a system", color = Muted, style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.padding(bottom = 4.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                if (wide) {
+                    Row(verticalAlignment = Alignment.Bottom, modifier = Modifier.weight(1f)) {
+                        Text("The Vault", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
+                        Spacer(Modifier.width(12.dp))
+                        Text("Pick a maker, then a system", color = Muted, style = MaterialTheme.typography.bodyMedium,
+                            modifier = Modifier.padding(bottom = 4.dp))
+                    }
+                } else {
+                    Column(Modifier.padding(top = 8.dp, bottom = 4.dp).weight(1f)) {
+                        Text("The Vault", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Black)
+                        Text("Pick a maker, then a system", color = Muted, style = MaterialTheme.typography.bodyMedium)
+                    }
                 }
-            } else {
-                Column(Modifier.padding(top = 8.dp, bottom = 4.dp)) {
-                    Text("The Vault", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Black)
-                    Text("Pick a maker, then a system", color = Muted, style = MaterialTheme.typography.bodyMedium)
+                // Search lives here now, top right of Browse.
+                FilledTonalButton(
+                    onClick = onSearch,
+                    modifier = Modifier.focusRing(RoundedCornerShape(50)),
+                    contentPadding = PaddingValues(horizontal = 18.dp, vertical = 10.dp),
+                ) {
+                    Icon(Icons.Filled.Search, null)
+                    Spacer(Modifier.width(8.dp))
+                    Text("Search", fontWeight = FontWeight.Bold)
                 }
             }
         }

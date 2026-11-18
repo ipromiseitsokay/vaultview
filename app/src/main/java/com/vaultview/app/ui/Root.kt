@@ -57,8 +57,8 @@ private data class Tab(val route: String, val label: String, val icon: ImageVect
 
 private val tabs = listOf(
     Tab("home", "Browse", Icons.Filled.Home),
-    Tab("search", "Search", Icons.Filled.Search),
-    Tab("library", "Saved", Icons.Filled.Favorite),
+    Tab("library", "Library", LibraryIcon),
+    Tab("saved", "Saved", Icons.Filled.Favorite),
     Tab("downloads", "Downloads", DownloadIcon),
     Tab("settings", "Settings", Icons.Filled.Settings),
 )
@@ -71,6 +71,7 @@ fun VaultRoot() {
     val entry by nav.currentBackStackEntryAsState()
     val route = entry?.destination?.route
     var selected by remember { mutableStateOf<Game?>(null) }
+    var owned by remember { mutableStateOf<com.vaultview.app.data.LibraryGame?>(null) }
     val onGame: (Game) -> Unit = { Sfx.tap(Sfx.Cue.SELECT); selected = it }
     val config = LocalConfiguration.current
     val wide = config.screenWidthDp > config.screenHeightDp
@@ -79,7 +80,7 @@ fun VaultRoot() {
 
     val activeDownloads = Downloads.items.count { it.active }
     fun isActive(t: Tab) = route?.substringBefore('/')?.substringBefore('?') == t.route ||
-        (t.route == "home" && (route?.startsWith("system/") == true || route?.startsWith("game/") == true))
+        (t.route == "home" && (route?.startsWith("system/") == true || route?.startsWith("game/") == true || route == "search"))
     fun go(t: Tab) = nav.navigate(t.route) {
         popUpTo(nav.graph.findStartDestination().id) { saveState = true }
         launchSingleTop = true
@@ -105,14 +106,14 @@ fun VaultRoot() {
                             icon = { TabIcon(t, activeDownloads) },
                             label = { Text(t.label, maxLines = 1, fontWeight = FontWeight.Bold) },
                             colors = vimmRailColors(),
-                            modifier = Modifier.focusRing(RoundedCornerShape(18.dp), 1.06f),
+                            modifier = Modifier.focusGlow(),
                         )
                     }
                     Spacer(Modifier.weight(1f))
                 }
                 Column(Modifier.weight(1f)) {
                     UpdateBanner()
-                    Host(nav, onGame, Modifier.weight(1f))
+                    Host(nav, onGame, { owned = it }, Modifier.weight(1f))
                 }
             }
             }
@@ -137,7 +138,7 @@ fun VaultRoot() {
             ) { pad ->
                 Column(Modifier.padding(pad)) {
                     UpdateBanner()
-                    Host(nav, onGame, Modifier.weight(1f))
+                    Host(nav, onGame, { owned = it }, Modifier.weight(1f))
                 }
             }
         }
@@ -145,14 +146,19 @@ fun VaultRoot() {
         selected?.let { g ->
             GameSheet(g, onDismiss = { selected = null }, onGet = { Sfx.tap(Sfx.Cue.SELECT); selected = null; nav.navigate(gameRoute(g)) })
         }
+        owned?.let { g ->
+            LibrarySheet(g, onDismiss = { owned = null }, onVimm = { id ->
+                owned = null; nav.navigate(gameRoute(Game(id, g.title, g.system?.name)))
+            })
+        }
     }
 }
 
 @Composable
-private fun Host(nav: NavHostController, onGame: (Game) -> Unit, modifier: Modifier) {
+private fun Host(nav: NavHostController, onGame: (Game) -> Unit, onOwned: (com.vaultview.app.data.LibraryGame) -> Unit, modifier: Modifier) {
     // Tabs cross-fade; drilling into a system or game slides in from the right.
     val ease = tween<Float>(320, easing = FastOutSlowInEasing)
-    fun deep(route: String?) = route?.startsWith("system/") == true || route?.startsWith("game/") == true
+    fun deep(route: String?) = route?.startsWith("system/") == true || route?.startsWith("game/") == true || route == "search"
     NavHost(
         nav, startDestination = "home", modifier = modifier,
         enterTransition = {
@@ -172,12 +178,18 @@ private fun Host(nav: NavHostController, onGame: (Game) -> Unit, modifier: Modif
             else fadeOut(tween(160))
         },
     ) {
-        composable("home") { HomeScreen(onSystem = { Sfx.tap(Sfx.Cue.SELECT); nav.navigate("system/$it") }, onGame = onGame) }
+        composable("home") {
+            HomeScreen(
+                onSystem = { Sfx.tap(Sfx.Cue.SELECT); nav.navigate("system/$it") }, onGame = onGame,
+                onSearch = { Sfx.tap(Sfx.Cue.SELECT); nav.navigate("search") },
+            )
+        }
         composable("system/{code}") { e ->
             SystemScreen(e.arguments?.getString("code").orEmpty(), onBack = { nav.popBackStack() }, onGame = onGame)
         }
-        composable("search") { SearchScreen(onGame) }
-        composable("library") { LibraryScreen(onGame) }
+        composable("search") { SearchScreen(onGame, onBack = { nav.popBackStack() }) }
+        composable("library") { LibraryScreen(onOpen = { Sfx.tap(Sfx.Cue.SELECT); onOwned(it) }) }
+        composable("saved") { SavedScreen(onGame) }
         composable("downloads") { DownloadsScreen(onGame) }
         composable("settings") { SettingsScreen() }
         composable("game/{id}?title={title}&system={system}") { e ->

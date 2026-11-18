@@ -84,6 +84,14 @@ object Vimm {
      * Likely box-art URLs on thumbnails.libretro.com (No-Intro style names), best guess first.
      * vimm writes "Zelda, The: A Link to the Past"; No-Intro writes "Zelda, The - A Link to the Past (USA)".
      */
+    /** Box art for an exact No-Intro name, e.g. a downloaded file's name without its extension. */
+    fun libretroExact(system: String?, noIntroName: String): String? {
+        val folder = Systems.find(system)?.libretro ?: return null
+        fun enc(s: String) = java.net.URLEncoder.encode(s, "UTF-8").replace("+", "%20")
+        val clean = noIntroName.replace(Regex("[&*/:`<>?\\\\|\"]"), "_")
+        return "https://thumbnails.libretro.com/${enc(folder)}/Named_Boxarts/${enc(clean)}.png"
+    }
+
     fun libretroBoxArt(system: String?, title: String?, regions: List<String>): List<String> {
         val folder = Systems.find(system)?.libretro ?: return emptyList()
         if (title.isNullOrBlank()) return emptyList()

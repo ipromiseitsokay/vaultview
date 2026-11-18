@@ -4,12 +4,14 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.font.FontWeight
@@ -20,7 +22,7 @@ import com.vaultview.app.data.Systems
 import com.vaultview.app.data.Vimm
 
 @Composable
-fun SearchScreen(onGame: (Game) -> Unit) {
+fun SearchScreen(onGame: (Game) -> Unit, onBack: () -> Unit) {
     var query by rememberSaveable { mutableStateOf("") }
     var submitted by rememberSaveable { mutableStateOf("") }
     var system by rememberSaveable { mutableStateOf<String?>(null) }
@@ -36,12 +38,17 @@ fun SearchScreen(onGame: (Game) -> Unit) {
     }
 
     Column(Modifier.fillMaxSize()) {
-        Text("Search", style = MaterialTheme.typography.headlineLarge, fontWeight = FontWeight.Black,
-            modifier = Modifier.padding(start = 16.dp, top = 16.dp, bottom = 8.dp))
+        Row(Modifier.padding(start = 4.dp, top = 8.dp, bottom = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+            IconButton(onClick = onBack, modifier = Modifier.focusRing(androidx.compose.foundation.shape.CircleShape)) {
+                Icon(Icons.Filled.ArrowBack, "Back")
+            }
+            Text("Search", style = MaterialTheme.typography.headlineMedium, fontWeight = FontWeight.Black)
+        }
         SearchBox(
             query = query, onQueryChange = { query = it }, placeholder = "Game title",
             onSubmit = { submitted = query.trim() }, onClear = { query = ""; submitted = "" },
-            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp).initialFocus(),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+            autoFocus = true,
         )
         Box(Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
             FilledTonalButton(onClick = { menu = true }, modifier = Modifier.focusRing(androidx.compose.foundation.shape.RoundedCornerShape(50))) {

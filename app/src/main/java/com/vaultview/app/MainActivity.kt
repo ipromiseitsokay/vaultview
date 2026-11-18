@@ -28,6 +28,10 @@ class MainActivity : ComponentActivity() {
     private val lastMove = LongArray(4)          // per direction, when we last moved
     private var held = 0                         // direction keycode held on the stick/hat
     private var repeater: Runnable? = null
+    private var lastPress = 0L                  // last A-type or B-type press
+    private var lastPressKind = 0               // 1 = select, 2 = back
+    private var lastPressCode = 0
+    private val swallowUp = mutableSetOf<Int>() // releases of presses we dropped
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -60,11 +64,42 @@ class MainActivity : ComponentActivity() {
             }
             return super.dispatchKeyEvent(event)
         }
-        if (event.action == KeyEvent.ACTION_DOWN && event.repeatCount == 0) {
-            when (code) {
-                // A arrives as BUTTON_A and, if unhandled, again as DPAD_CENTER; sound only on the latter.
-                KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> Sfx.key(Sfx.Cue.SELECT)
-                KeyEvent.KEYCODE_BACK -> Sfx.key(Sfx.Cue.BACK)
+        // Gamepad A and B are turned into select and back here, exactly once per press.
+        // Some handhelds also send their own select/back next to A/B; that twin is dropped.
+        val kind = when (code) {
+            KeyEvent.KEYCODE_BUTTON_A, KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER, KeyEvent.KEYCODE_NUMPAD_ENTER -> 1
+            KeyEvent.KEYCODE_BUTTON_B, KeyEvent.KEYCODE_BACK -> 2
+            else -> 0
+        }
+        if (kind != 0) {
+            val gamepad = code == KeyEvent.KEYCODE_BUTTON_A || code == KeyEvent.KEYCODE_BUTTON_B
+            val mapped = when (code) {
+                KeyEvent.KEYCODE_BUTTON_A -> KeyEvent.KEYCODE_DPAD_CENTER
+                KeyEvent.KEYCODE_BUTTON_B -> KeyEvent.KEYCODE_BACK
+                else -> code
+            }
+            when (event.action) {
+                KeyEvent.ACTION_DOWN -> {
+                    if (event.repeatCount > 0) return if (gamepad) true else super.dispatchKeyEvent(event)
+                    val now = SystemClock.uptimeMillis()
+                    if (kind == lastPressKind && code != lastPressCode && now - lastPress < 180) {
+                        swallowUp += code
+                        return true
+                    }
+                    lastPress = now; lastPressKind = kind; lastPressCode = code
+                    Sfx.key(if (kind == 1) Sfx.Cue.SELECT else Sfx.Cue.BACK)
+                    if (gamepad) {
+                        super.dispatchKeyEvent(KeyEvent(event.downTime, event.eventTime, KeyEvent.ACTION_DOWN, mapped, 0))
+                        return true
+                    }
+                }
+                KeyEvent.ACTION_UP -> {
+                    if (swallowUp.remove(code)) return true
+                    if (gamepad) {
+                        super.dispatchKeyEvent(KeyEvent(event.downTime, event.eventTime, KeyEvent.ACTION_UP, mapped, 0))
+                        return true
+                    }
+                }
             }
         }
         return super.dispatchKeyEvent(event)

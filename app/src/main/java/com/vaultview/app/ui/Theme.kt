@@ -50,7 +50,7 @@ fun VaultTheme(content: @Composable () -> Unit) = MaterialTheme(colorScheme = sc
     CompositionLocalProvider(
         LocalRippleConfiguration provides RippleConfiguration(
             color = Color.White,
-            rippleAlpha = RippleAlpha(pressedAlpha = 0.22f, focusedAlpha = 0.30f, draggedAlpha = 0.16f, hoveredAlpha = 0.10f),
+            rippleAlpha = RippleAlpha(pressedAlpha = 0.18f, focusedAlpha = 0.16f, draggedAlpha = 0.14f, hoveredAlpha = 0.08f),
         ),
         content = content,
     )
