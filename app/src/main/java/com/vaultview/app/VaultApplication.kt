@@ -12,10 +12,13 @@ import com.vaultview.app.data.Vimm
 class VaultApplication : Application(), ImageLoaderFactory {
     override fun onCreate() {
         super.onCreate()
+        com.vaultview.app.data.CrashLog.install(this)
         Vimm.init(this)
         com.vaultview.app.data.Catalog.init(this, kotlinx.coroutines.MainScope())
         Favorites.init(this)
         Settings.init(this)
+        // Crashed last time while the bottom-screen deck was up: start without it, so the app opens.
+        if (com.vaultview.app.data.CrashLog.crashedWithDeck()) Settings.updateSecondScreen(false)
         Downloads.init(this)
         Sfx.init(this)
         com.vaultview.app.data.Emulators.init(this)

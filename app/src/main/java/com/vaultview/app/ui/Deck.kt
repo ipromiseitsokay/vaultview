@@ -93,14 +93,23 @@ object Deck {
 object DeckController {
     private var deck: DeckActivity? = null
 
-    /** A public, switched-on display that isn't the main one: the Thor's bottom screen. */
-    fun secondDisplay(context: Context): Display? {
-        val dm = context.getSystemService(DisplayManager::class.java) ?: return null
-        return dm.displays.firstOrNull {
-            it.displayId != Display.DEFAULT_DISPLAY && it.state == Display.STATE_ON &&
-                (it.flags and Display.FLAG_PRIVATE) == 0
+    /** The display the app itself is on (a launcher like iiSU may not use display 0 for it). */
+    @Suppress("DEPRECATION")
+    fun homeDisplayId(context: Context): Int = runCatching {
+        if (context is Activity) {
+            if (android.os.Build.VERSION.SDK_INT >= 30) context.display?.displayId ?: Display.DEFAULT_DISPLAY
+            else context.windowManager.defaultDisplay.displayId
+        } else Display.DEFAULT_DISPLAY
+    }.getOrDefault(Display.DEFAULT_DISPLAY)
+
+    /** A public, switched-on display other than the app's own: the Thor's bottom screen. */
+    fun secondDisplay(context: Context): Display? = runCatching {
+        val home = homeDisplayId(context)
+        val dm = context.getSystemService(DisplayManager::class.java) ?: return@runCatching null
+        dm.displays.firstOrNull {
+            it.displayId != home && it.state == Display.STATE_ON && (it.flags and Display.FLAG_PRIVATE) == 0
         }
-    }
+    }.getOrNull()
 
     fun show(activity: Activity) {
         if (!Settings.secondScreen || deck != null) return
@@ -112,28 +121,31 @@ object DeckController {
                     .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_MULTIPLE_TASK or Intent.FLAG_ACTIVITY_NO_ANIMATION),
                 opts.toBundle(),
             )
-            // Opening an activity on the bottom screen makes that display the focused one. Bring the top
-            // screen's task back to the front so the controller keeps steering the main app.
-            activity.window.decorView.postDelayed({ refocus(activity) }, 300)
+            // Opening an activity on the bottom screen can make that display the focused one. If the top
+            // screen lost focus, bring its task back so the controller keeps steering the main app.
+            val home = homeDisplayId(activity)
+            activity.window.decorView.postDelayed({ refocus(activity, home) }, 400)
         }
     }
 
-    private fun refocus(activity: Activity) {
-        if (activity.isFinishing) return
+    private fun refocus(activity: Activity, home: Int) {
+        if (activity.isFinishing || activity.isDestroyed || activity.hasWindowFocus()) return
         runCatching {
             // Bring the existing top-screen activity forward (not a new copy); starting it moves focus.
             activity.startActivity(
                 Intent(activity, activity.javaClass)
                     .addFlags(Intent.FLAG_ACTIVITY_REORDER_TO_FRONT or Intent.FLAG_ACTIVITY_SINGLE_TOP or Intent.FLAG_ACTIVITY_NO_ANIMATION),
-                ActivityOptions.makeBasic().setLaunchDisplayId(Display.DEFAULT_DISPLAY).toBundle(),
+                ActivityOptions.makeBasic().setLaunchDisplayId(home).toBundle(),
             )
         }
     }
 
-    fun hide() { deck?.finish(); deck = null }
+    fun hide() { runCatching { deck?.finish() }; deck = null }
 
-    internal fun attached(a: DeckActivity) { deck = a; Deck.showing = true }
-    internal fun detached(a: DeckActivity) { if (deck === a) { deck = null; Deck.showing = false } }
+    internal fun attached(a: DeckActivity) { deck = a; Deck.showing = true; com.vaultview.app.data.CrashLog.deckShowing = true }
+    internal fun detached(a: DeckActivity) {
+        if (deck === a) { deck = null; Deck.showing = false; com.vaultview.app.data.CrashLog.deckShowing = false }
+    }
 }
 
 class DeckActivity : ComponentActivity() {
@@ -144,7 +156,10 @@ class DeckActivity : ComponentActivity() {
         window.decorView.isSoundEffectsEnabled = false
         DeckController.attached(this)
         setContent { VaultTheme { Surface(color = Bg, contentColor = Color.White) { DeckScreen() } } }
+        applyFullscreen()
     }
+
+    override fun onResume() { super.onResume(); applyFullscreen() }
 
     override fun onDestroy() { DeckController.detached(this); super.onDestroy() }
 
@@ -164,7 +179,7 @@ private fun DeckScreen() {
     val letters = Deck.letters
     val accent = if (Deck.ports) Color(0xFF0B1A5C) else VimmMaroon
     Column(
-        Modifier.fillMaxSize().background(Bg).systemBarsPadding().padding(14.dp),
+        Modifier.fillMaxSize().background(Bg).safeDrawingPadding().padding(14.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         // Mode strip.

@@ -229,3 +229,17 @@ fun openOnSite(context: Context, url: String) {
         context.startActivity(Intent(Intent.ACTION_VIEW, uri))
     }
 }
+
+/**
+ * Opens Android's folder picker. Some handheld builds ship without one, or refuse it from a second
+ * screen; say so instead of crashing.
+ */
+fun androidx.activity.result.ActivityResultLauncher<android.net.Uri?>.launchSafely(context: android.content.Context) {
+    try {
+        launch(null)
+    } catch (e: Exception) {
+        android.widget.Toast.makeText(context,
+            "Couldn't open Android's folder picker on this device (${e.javaClass.simpleName}).",
+            android.widget.Toast.LENGTH_LONG).show()
+    }
+}

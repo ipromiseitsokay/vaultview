@@ -1,5 +1,6 @@
 package com.vaultview.app
 
+import com.vaultview.app.ui.applyFullscreen
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -60,6 +61,7 @@ class MainActivity : ComponentActivity() {
         current = this
         enableEdgeToEdge()
         setContent { VaultTheme { VaultRoot() } }
+        applyFullscreen()
         // The app plays its own sounds; turn off Android's clicks so nothing doubles.
         window.decorView.isSoundEffectsEnabled = false
         findViewById<ViewGroup>(android.R.id.content)?.let { root ->
@@ -230,8 +232,15 @@ class MainActivity : ComponentActivity() {
         super.onStop()
     }
 
+    override fun onWindowFocusChanged(hasFocus: Boolean) {
+        super.onWindowFocusChanged(hasFocus)
+        // Dialogs, the keyboard and other apps can bring the bars back; hide them again.
+        if (hasFocus) applyFullscreen()
+    }
+
     override fun onResume() {
         super.onResume()
+        applyFullscreen()
         // Back from an emulator: count the time played.
         com.vaultview.app.data.Playtime.finish()
         // Might be back from installing an emulator.

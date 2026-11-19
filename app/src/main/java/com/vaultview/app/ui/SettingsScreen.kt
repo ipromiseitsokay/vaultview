@@ -49,7 +49,7 @@ fun SettingsScreen() {
             Text("Download folder", fontWeight = FontWeight.SemiBold)
             Text(Settings.folderLabel() ?: "Not chosen yet", color = Muted, style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(8.dp))
-            FilledTonalButton(onClick = { pickFolder.launch(null) }, modifier = Modifier.initialFocus().focusRing(RoundedCornerShape(50))) {
+            FilledTonalButton(onClick = { pickFolder.launchSafely(context) }, modifier = Modifier.initialFocus().focusRing(RoundedCornerShape(50))) {
                 Text(if (Settings.folderUri == null) "Choose folder" else "Change folder")
             }
             HorizontalDivider(Modifier.padding(vertical = 12.dp))
@@ -71,7 +71,7 @@ fun SettingsScreen() {
                 color = Muted, style = MaterialTheme.typography.bodySmall)
             Spacer(Modifier.height(8.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(10.dp), verticalAlignment = Alignment.CenterVertically) {
-                ToolButton(if (Settings.esdeUri == null) "Choose ES-DE folder" else "Change folder", { pickEsde.launch(null) }, icon = BrowseIcon)
+                ToolButton(if (Settings.esdeUri == null) "Choose ES-DE folder" else "Change folder", { pickEsde.launchSafely(context) }, icon = BrowseIcon)
                 if (Settings.esdeUri != null) {
                     val busy = com.vaultview.app.data.Frontends.busy
                     ToolButton(busy?.let { "Exporting ${(it * 100).toInt()}%" } ?: "Export my library",
@@ -90,6 +90,13 @@ fun SettingsScreen() {
             }
             Text("In iiSU: Settings › ROM Import › link ES-DE metadata, and point it at the same ROMs folder. Needs “Sort into system folders” on.",
                 color = Muted, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(top = 8.dp))
+        }
+        Section("Display") {
+            val act = context as? android.app.Activity
+            Toggle("Full screen", "Hide Android's status and navigation bars. Swipe in from an edge to see them.", Settings.fullscreen) {
+                Settings.updateFullscreen(it)
+                act?.applyFullscreen()
+            }
         }
         Section("Second screen") {
             val context = androidx.compose.ui.platform.LocalContext.current

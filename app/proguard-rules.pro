@@ -22,3 +22,8 @@
 
 # 7-Zip-JBinding calls back into these classes from native code.
 -keep class net.sf.sevenzipjbinding.** { *; }
+
+# Readable crash reports: keep VaultView's own class/method names and line numbers.
+-keepattributes SourceFile,LineNumberTable
+-renamesourcefileattribute SourceFile
+-keepnames class com.vaultview.app.** { *; }

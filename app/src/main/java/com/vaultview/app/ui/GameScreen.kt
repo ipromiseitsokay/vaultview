@@ -296,7 +296,7 @@ fun GameScreen(id: Int, title: String, system: String?, onBack: () -> Unit, onSh
                     (if (Settings.systemFolders) "Games are sorted into system folders like snes and psx" else "Games are saved there") +
                     (if (Settings.autoExtract) " and unzipped automatically." else "."))
             },
-            confirmButton = { Button(onClick = { askFolder = false; pickFolder.launch(null) }) { Text("Choose folder") } },
+            confirmButton = { Button(onClick = { askFolder = false; pickFolder.launchSafely(context) }) { Text("Choose folder") } },
             dismissButton = { TextButton(onClick = { askFolder = false; pending = null }) { Text("Cancel") } },
         )
     }

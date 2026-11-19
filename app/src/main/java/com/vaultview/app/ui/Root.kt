@@ -126,10 +126,12 @@ fun VaultRoot() {
         Deck.onTab = { r -> (shownTabs.firstOrNull { it.route == r } ?: tabs.firstOrNull { it.route == r })?.let { go(it) } }
     }
 
+    CrashReportDialog()
     CompositionLocalProvider(LocalWide provides wide) {
         if (wide) {
             Surface(color = Bg, contentColor = MaterialTheme.colorScheme.onBackground) {
-            Row(Modifier.fillMaxSize().systemBarsPadding()) {
+            // safeDrawing: nothing when the bars are hidden (fullscreen), the bars' space when they're shown.
+            Row(Modifier.fillMaxSize().safeDrawingPadding()) {
                 NavigationRail(
                     containerColor = Color.Transparent,
                     modifier = Modifier.fillMaxHeight()
@@ -348,3 +350,42 @@ private fun UpdateBannerContent() {
 
 
 
+
+/** After a crash: offer to share the saved report, and switch off the second screen if it was involved. */
+@Composable
+fun CrashReportDialog() {
+    val context = LocalContext.current
+    var report by remember { mutableStateOf(com.vaultview.app.data.CrashLog.pending()) }
+    val withDeck = remember { com.vaultview.app.data.CrashLog.crashedWithDeck() }
+    LaunchedEffect(Unit) {
+        // A crash while the bottom-screen deck was up: start without it so the app stays usable.
+        if (withDeck && com.vaultview.app.data.Settings.secondScreen) com.vaultview.app.data.Settings.updateSecondScreen(false)
+    }
+    val text = report ?: return
+    fun close() { com.vaultview.app.data.CrashLog.clear(); report = null }
+    AlertDialog(
+        onDismissRequest = { close() },
+        containerColor = Panel,
+        title = { Text("VaultView closed unexpectedly") },
+        text = {
+            Text(
+                "A crash report was saved on this device. Sharing it (to Discord, email, notes…) shows exactly what went wrong." +
+                    if (withDeck) "\n\nThe bottom-screen deck was on when it happened, so it's switched off for now. You can turn it back on in Settings › Second screen." else "",
+            )
+        },
+        confirmButton = {
+            Button(onClick = {
+                runCatching {
+                    context.startActivity(android.content.Intent.createChooser(
+                        android.content.Intent(android.content.Intent.ACTION_SEND).setType("text/plain")
+                            .putExtra(android.content.Intent.EXTRA_SUBJECT, "VaultView crash report")
+                            .putExtra(android.content.Intent.EXTRA_TEXT, text),
+                        "Share crash report",
+                    ))
+                }
+                close()
+            }, shape = RoundedCornerShape(10.dp)) { Text("Share report") }
+        },
+        dismissButton = { TextButton(onClick = { close() }) { Text("Dismiss") } },
+    )
+}

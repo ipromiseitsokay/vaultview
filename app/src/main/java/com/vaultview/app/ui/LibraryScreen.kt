@@ -123,7 +123,7 @@ fun LibraryScreen(onOpen: (LibraryGame) -> Unit) {
                 Text("Your library shows every game in your ROMs folder, including ones you didn't get through VaultView.",
                     color = Muted)
                 Spacer(Modifier.height(14.dp))
-                Button(onClick = { pickFolder.launch(null) }, modifier = Modifier.initialFocus().focusRing(RoundedCornerShape(50))) {
+                Button(onClick = { pickFolder.launchSafely(context) }, modifier = Modifier.initialFocus().focusRing(RoundedCornerShape(50))) {
                     Text("Choose ROMs folder")
                 }
             }
